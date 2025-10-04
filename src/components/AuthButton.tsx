@@ -7,9 +7,9 @@ export default function AuthButton() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg">
-        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-        <span className="text-sm text-gray-300">Loading...</span>
+      <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
+        <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+        <span className="text-sm text-muted-foreground">Loading...</span>
       </div>
     );
   }
@@ -22,10 +22,10 @@ export default function AuthButton() {
             <img
               src={user.picture}
               alt={user.name || 'User'}
-              className="w-8 h-8 rounded-full"
+              className="w-8 h-8 rounded-full border border-border"
             />
           )}
-          <span className="text-sm text-gray-200">{user.name || user.email}</span>
+          <span className="text-sm">{user.name || user.email}</span>
         </div>
         <a
           href="/api/auth/logout"
@@ -40,7 +40,7 @@ export default function AuthButton() {
   return (
     <a
       href="/api/auth/login"
-      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+      className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors"
     >
       Login / Sign Up
     </a>

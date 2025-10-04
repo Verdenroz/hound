@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@auth0/nextjs-auth0';
 import { api, AgentStatus } from '@/lib/api';
-import { useWebSocket } from '@/lib/websocket';
+import { useWebSocket, WebSocketMessage } from '@/lib/websocket';
 import { AgentStatusPanel } from '@/components/AgentStatusPanel';
 import { PortfolioPanel } from '@/components/PortfolioPanel';
 import { NewsPanel } from '@/components/NewsPanel';
 import { LogsPanel } from '@/components/LogsPanel';
 import { TransactionHistory } from '@/components/TransactionHistory';
-import AuthButton from '@/components/AuthButton';
+import UserMenu from '@/components/UserMenu';
 
 export default function Home() {
   const { user, isLoading: authLoading } = useUser();
@@ -43,7 +43,7 @@ export default function Home() {
 
   // WebSocket connection
   const { isConnected } = useWebSocket(
-    useCallback((message) => {
+    useCallback((message: WebSocketMessage) => {
       if (message.type === 'agent_event' && message.event) {
         // Update state based on event type
         if (message.event.type === 'stateChange' || message.event.type === 'log') {
@@ -89,10 +89,10 @@ export default function Home() {
   // Show auth loading state
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
@@ -101,20 +101,23 @@ export default function Home() {
   // Show login prompt if not authenticated
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="absolute top-4 right-4">
+          <UserMenu />
+        </div>
         <div className="text-center max-w-md">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">
+          <h1 className="text-5xl font-bold mb-4">
             🐕 Hound AI Agent
           </h1>
-          <p className="text-gray-400 mb-8">
+          <p className="text-muted-foreground mb-8">
             Autonomous Financial Trading Agent with RLUSD Blockchain Execution
           </p>
-          <p className="text-gray-300 mb-6">
+          <p className="text-foreground mb-6">
             Please sign in to access your personalized portfolio and start the AI trading agent.
           </p>
           <a
             href="/api/auth/login"
-            className="inline-block px-8 py-3 text-lg font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-block px-8 py-3 text-lg font-medium text-white bg-accent hover:bg-accent-hover rounded-lg transition-colors"
           >
             Login / Sign Up
           </a>
@@ -125,56 +128,58 @@ export default function Home() {
 
   if (!agentStatus) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Connecting to Hound Agent...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Connecting to Hound Agent...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <header className="mb-8">
+    <div className="min-h-screen bg-background text-foreground p-8">
+      <header className="mb-8 space-y-4">
+        {/* Row 1: Title & Settings */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold">
               🐕 Hound AI Agent
             </h1>
-            <p className="text-gray-400 mt-2">
+            <p className="text-muted-foreground mt-2">
               Autonomous Financial Trading Agent with Blockchain Execution
             </p>
           </div>
 
-          <div className="flex gap-3 items-center">
-            <AuthButton />
+          <UserMenu />
+        </div>
 
-            <div className="flex items-center gap-2 text-sm">
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span className="text-gray-400">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-
-            {agentStatus.isRunning ? (
-              <button
-                onClick={handleStop}
-                disabled={isStopping}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
-              >
-                {isStopping ? 'Stopping...' : '⏸ Stop Agent'}
-              </button>
-            ) : (
-              <button
-                onClick={handleStart}
-                disabled={isStarting}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
-              >
-                {isStarting ? 'Starting...' : '▶ Start Agent'}
-              </button>
-            )}
+        {/* Row 2: Agent Controls */}
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div className="flex items-center gap-2 text-sm">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent' : 'bg-red-500'}`}></div>
+            <span className="text-muted-foreground">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
           </div>
+
+          {agentStatus.isRunning ? (
+            <button
+              onClick={handleStop}
+              disabled={isStopping}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
+            >
+              {isStopping ? 'Stopping...' : '⏸ Stop Agent'}
+            </button>
+          ) : (
+            <button
+              onClick={handleStart}
+              disabled={isStarting}
+              className="px-6 py-2 bg-accent hover:bg-accent-hover disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
+            >
+              {isStarting ? 'Starting...' : '▶ Start Agent'}
+            </button>
+          )}
         </div>
       </header>
 

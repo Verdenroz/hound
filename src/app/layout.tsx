@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Auth0Provider } from '@auth0/nextjs-auth0';
+import { ThemeProvider } from 'next-themes';
 import { auth0 } from '@/lib/auth0';
 import "./globals.css";
 
@@ -27,13 +28,15 @@ export default async function RootLayout({
   const session = await auth0.getSession();
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Auth0Provider user={session?.user}>
-          {children}
-        </Auth0Provider>
+        <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
+          <Auth0Provider user={session?.user}>
+            {children}
+          </Auth0Provider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -31,7 +31,7 @@ export function AgentStatusPanel({ state, isRunning, wallet }: AgentStatusPanelP
   const stateLabel = STATE_LABELS[state] || state;
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+    <div className="bg-card rounded-lg p-6 border border-border">
       <h2 className="text-2xl font-bold mb-4">Agent Status</h2>
 
       <div className="space-y-4">
@@ -41,8 +41,8 @@ export function AgentStatusPanel({ state, isRunning, wallet }: AgentStatusPanelP
         </div>
 
         {wallet && (
-          <div className="mt-4 p-3 bg-gray-900 rounded border border-gray-700">
-            <div className="text-sm text-gray-400 mb-1">XRPL Wallet</div>
+          <div className="mt-4 p-3 bg-muted rounded border border-border">
+            <div className="text-sm text-muted-foreground mb-1">XRPL Wallet</div>
             <div className="font-mono text-xs break-all">{wallet}</div>
           </div>
         )}
@@ -52,7 +52,7 @@ export function AgentStatusPanel({ state, isRunning, wallet }: AgentStatusPanelP
             <div
               key={s}
               className={`px-2 py-1 rounded transition-colors ${
-                state === s ? STATE_COLORS[s] + ' text-white' : 'bg-gray-700 text-gray-400'
+                state === s ? STATE_COLORS[s] + ' text-white' : 'bg-muted text-muted-foreground'
               }`}
             >
               {STATE_LABELS[s]}
