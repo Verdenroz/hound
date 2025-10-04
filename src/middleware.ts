@@ -1,7 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { auth0 } from './lib/auth0';
+import { updateSession } from '@/utils/supabase/middleware';
 
 export async function middleware(request: NextRequest) {
+  // First handle Supabase session refresh
+  const supabaseResponse = await updateSession(request);
+
+  // Then handle Auth0 middleware
   return await auth0.middleware(request);
 }
 

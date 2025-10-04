@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@auth0/nextjs-auth0';
 import { api, AgentStatus } from '@/lib/api';
-import { useWebSocket, WebSocketMessage } from '@/lib/websocket';
 import { AgentStatusPanel } from '@/components/AgentStatusPanel';
 import { PortfolioPanel } from '@/components/PortfolioPanel';
 import { NewsPanel } from '@/components/NewsPanel';
@@ -14,6 +13,7 @@ import UserMenu from '@/components/UserMenu';
 export default function Home() {
   const { user, isLoading: authLoading } = useUser();
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
+  const [portfolio, setPortfolio] = useState<any>(null);
   const [trades, setTrades] = useState<any[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
@@ -21,45 +21,52 @@ export default function Home() {
   // Fetch initial data
   const fetchData = useCallback(async () => {
     try {
-      const [status, tradesData] = await Promise.all([
+      const promises = [
         api.getAgentStatus(),
         api.getTrades(),
-      ]);
-      setAgentStatus(status);
-      setTrades(tradesData.trades || []);
+      ];
+
+      // Only fetch portfolio if user is authenticated
+      if (user) {
+        promises.push(api.getPortfolio());
+      }
+
+      const results = await Promise.all(promises);
+      setAgentStatus(results[0]);
+      setTrades(results[1].trades || []);
+
+      if (user && results[2]) {
+        setPortfolio(results[2]);
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
     }
-  }, []);
+  }, [user]);
+
+  // Execute agent cycle when running
+  useEffect(() => {
+    if (agentStatus?.isRunning && user) {
+      const executeCycle = async () => {
+        try {
+          await api.executeAgentCycle();
+          await fetchData();
+        } catch (error) {
+          console.error('Agent cycle error:', error);
+        }
+      };
+
+      executeCycle();
+    }
+  }, [agentStatus?.isRunning, agentStatus?.state, user, fetchData]);
 
   useEffect(() => {
     fetchData();
 
-    // Poll every 2 seconds as fallback
+    // Poll every 2 seconds
     const interval = setInterval(fetchData, 2000);
 
     return () => clearInterval(interval);
   }, [fetchData]);
-
-  // WebSocket connection
-  const { isConnected } = useWebSocket(
-    useCallback((message: WebSocketMessage) => {
-      if (message.type === 'agent_event' && message.event) {
-        // Update state based on event type
-        if (message.event.type === 'stateChange' || message.event.type === 'log') {
-          fetchData();
-        }
-      } else if (message.type === 'initial_state' && message.data) {
-        setAgentStatus((prev) => ({
-          ...prev,
-          state: message.data.state,
-          isRunning: message.data.isRunning,
-          portfolio: message.data.portfolio,
-          wallet: message.data.wallet,
-        } as AgentStatus));
-      }
-    }, [fetchData])
-  );
 
   const handleStart = async () => {
     setIsStarting(true);
@@ -157,9 +164,9 @@ export default function Home() {
         {/* Row 2: Agent Controls */}
         <div className="flex items-center justify-between pt-4 border-t border-border">
           <div className="flex items-center gap-2 text-sm">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent' : 'bg-red-500'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${agentStatus?.isRunning ? 'bg-accent' : 'bg-muted'}`}></div>
             <span className="text-muted-foreground">
-              {isConnected ? 'Connected' : 'Disconnected'}
+              {agentStatus?.isRunning ? 'Agent Running' : 'Agent Idle'}
             </span>
           </div>
 
@@ -190,7 +197,7 @@ export default function Home() {
           wallet={agentStatus.wallet}
         />
 
-        <PortfolioPanel portfolio={agentStatus.portfolio} />
+        <PortfolioPanel portfolio={portfolio} user={user ? { email: user.email, name: user.name } : undefined} />
 
         <NewsPanel news={agentStatus.currentNews} />
 

@@ -9,7 +9,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export interface User {
   id: string;
   auth0_sub: string;
-  email: string;
+  email: string; // Primary identifier
   name: string | null;
   created_at: string;
   updated_at: string;
@@ -32,6 +32,7 @@ export interface Portfolio {
   risk_tolerance: 'conservative' | 'moderate' | 'aggressive';
   xrpl_wallet_address: string | null;
   xrpl_wallet_seed: string | null;
+  onboarding_completed: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -64,18 +65,29 @@ export interface AgentSession {
 
 // Helper functions for common queries
 export async function getOrCreateUser(auth0Sub: string, email: string, name?: string) {
-  // Check if user exists
+  // Check if user exists by email (primary identifier)
   const { data: existingUser } = await supabase
     .from('users')
     .select('*')
-    .eq('auth0_sub', auth0Sub)
+    .eq('email', email)
     .single();
 
   if (existingUser) {
+    // Update auth0_sub and name if they've changed
+    if (existingUser.auth0_sub !== auth0Sub || existingUser.name !== name) {
+      const { data: updatedUser } = await supabase
+        .from('users')
+        .update({ auth0_sub: auth0Sub, name })
+        .eq('email', email)
+        .select()
+        .single();
+
+      return updatedUser as User;
+    }
     return existingUser as User;
   }
 
-  // Create new user (triggers auto-creation of portfolio and default holdings)
+  // Create new user (triggers auto-creation of empty portfolio via DB trigger)
   const { data: newUser, error } = await supabase
     .from('users')
     .insert({ auth0_sub: auth0Sub, email, name })
