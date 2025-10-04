@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUser } from '@auth0/nextjs-auth0';
 import { api, AgentStatus } from '@/lib/api';
 import { useWebSocket } from '@/lib/websocket';
 import { AgentStatusPanel } from '@/components/AgentStatusPanel';
@@ -8,8 +9,10 @@ import { PortfolioPanel } from '@/components/PortfolioPanel';
 import { NewsPanel } from '@/components/NewsPanel';
 import { LogsPanel } from '@/components/LogsPanel';
 import { TransactionHistory } from '@/components/TransactionHistory';
+import AuthButton from '@/components/AuthButton';
 
 export default function Home() {
+  const { user, isLoading: authLoading } = useUser();
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [trades, setTrades] = useState<any[]>([]);
   const [isStarting, setIsStarting] = useState(false);
@@ -83,6 +86,43 @@ export default function Home() {
     }
   };
 
+  // Show auth loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">
+            🐕 Hound AI Agent
+          </h1>
+          <p className="text-gray-400 mb-8">
+            Autonomous Financial Trading Agent with RLUSD Blockchain Execution
+          </p>
+          <p className="text-gray-300 mb-6">
+            Please sign in to access your personalized portfolio and start the AI trading agent.
+          </p>
+          <a
+            href="/api/auth/login"
+            className="inline-block px-8 py-3 text-lg font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Login / Sign Up
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   if (!agentStatus) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -108,6 +148,8 @@ export default function Home() {
           </div>
 
           <div className="flex gap-3 items-center">
+            <AuthButton />
+
             <div className="flex items-center gap-2 text-sm">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
               <span className="text-gray-400">

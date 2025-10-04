@@ -4,6 +4,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import * as dotenv from 'dotenv';
 import { AgentOrchestrator, AgentEvent } from './agent/orchestrator';
+import { requireAuth, optionalAuth } from './middleware/auth';
+import { getOrCreateUser, getUserPortfolio } from './services/supabase';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -70,7 +72,28 @@ app.get('/api/agent/status', (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/agent/start', async (req: Request, res: Response) => {
+// User profile endpoint (protected)
+app.get('/api/user/profile', requireAuth, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const user = await getOrCreateUser(req.user.sub, req.user.email, req.user.name);
+    const { portfolio, holdings } = await getUserPortfolio(user.id);
+
+    res.json({
+      user,
+      portfolio,
+      holdings,
+    });
+  } catch (error: any) {
+    console.error('Error fetching user profile:', error);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+app.post('/api/agent/start', requireAuth, async (req: Request, res: Response) => {
   if (!agent) {
     return res.status(500).json({ error: 'Agent not initialized' });
   }
@@ -79,12 +102,14 @@ app.post('/api/agent/start', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Agent is already running' });
   }
 
+  // TODO: In future, create user-specific agent instance
+  // For now, use the shared agent but track user session
   await agent.start();
 
   res.json({ success: true, message: 'Agent started' });
 });
 
-app.post('/api/agent/stop', (req: Request, res: Response) => {
+app.post('/api/agent/stop', requireAuth, (req: Request, res: Response) => {
   if (!agent) {
     return res.status(500).json({ error: 'Agent not initialized' });
   }
@@ -94,24 +119,76 @@ app.post('/api/agent/stop', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Agent stopped' });
 });
 
-app.get('/api/portfolio', (req: Request, res: Response) => {
-  if (!agent) {
-    return res.status(500).json({ error: 'Agent not initialized' });
-  }
+app.get('/api/portfolio', optionalAuth, async (req: Request, res: Response) => {
+  try {
+    // If Supabase is configured and user is authenticated, use user-specific portfolio
+    if (req.user && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const user = await getOrCreateUser(req.user.sub, req.user.email, req.user.name);
+      const { portfolio, holdings } = await getUserPortfolio(user.id);
 
-  res.json(agent.getPortfolio());
+      return res.json({
+        holdings: holdings.map((h) => ({
+          ticker: h.ticker,
+          shares: h.shares,
+          avg_price: h.avg_price,
+        })),
+        cash_balance: portfolio.cash_balance,
+        risk_tolerance: portfolio.risk_tolerance,
+      });
+    }
+
+    // Fallback to agent's portfolio (for development without Supabase)
+    if (!agent) {
+      return res.status(500).json({ error: 'Agent not initialized' });
+    }
+
+    res.json(agent.getPortfolio());
+  } catch (error: any) {
+    console.error('Error fetching portfolio:', error);
+
+    // Fallback to agent portfolio on error
+    if (agent) {
+      return res.json(agent.getPortfolio());
+    }
+
+    res.status(500).json({ error: 'Failed to fetch portfolio' });
+  }
 });
 
-app.get('/api/trades', (req: Request, res: Response) => {
-  if (!agent) {
-    return res.status(500).json({ error: 'Agent not initialized' });
+app.get('/api/trades', optionalAuth, async (req: Request, res: Response) => {
+  try {
+    // If Supabase is configured and user is authenticated, use user-specific trades
+    if (req.user && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const user = await getOrCreateUser(req.user.sub, req.user.email, req.user.name);
+      const { getUserTrades } = await import('./services/supabase');
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const trades = await getUserTrades(user.id, limit);
+
+      return res.json({ trades });
+    }
+
+    // Fallback to agent's trades (for development without Supabase)
+    if (!agent) {
+      return res.status(500).json({ error: 'Agent not initialized' });
+    }
+
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+    res.json({
+      trades: agent.getTradeHistory(limit),
+    });
+  } catch (error: any) {
+    console.error('Error fetching trades:', error);
+
+    // Fallback to agent trades on error
+    if (agent) {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      return res.json({
+        trades: agent.getTradeHistory(limit),
+      });
+    }
+
+    res.status(500).json({ error: 'Failed to fetch trades' });
   }
-
-  const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-
-  res.json({
-    trades: agent.getTradeHistory(limit),
-  });
 });
 
 app.get('/api/logs', (req: Request, res: Response) => {
