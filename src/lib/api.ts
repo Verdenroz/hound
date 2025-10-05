@@ -27,6 +27,7 @@ export interface TickerSearchResult {
   symbol: string;
   exchange: string;
   type: 'stock' | 'etf' | 'trust';
+  logo?: string;
 }
 
 export const api = {
@@ -152,6 +153,12 @@ export const api = {
 
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to search tickers');
-    return response.json();
+    const results = await response.json();
+
+    // Add logo URLs to each result
+    return results.map((result: TickerSearchResult) => ({
+      ...result,
+      logo: `https://img.logo.dev/ticker/${result.symbol}?token=pk_Xd1Cdye3QYmCOXzcvxhxyw&retina=true`
+    }));
   },
 };

@@ -143,9 +143,10 @@ export class XRPLService {
   ): Promise<XRPLTransaction> {
     await this.connect();
 
-    // Use RLUSD (Ripple's USD stablecoin) for real-world value representation
-    // This demonstrates cross-border payments and DeFi use case for XRPL challenge
-    const rlusdAmount = amountUSD.toString();
+    // Use XRP for testnet demo (automatically funded via faucet)
+    // Convert USD amount to XRP (approximate 1:1 for demo purposes)
+    // In production: use RLUSD or real exchange rates
+    const xrpAmount = amountUSD.toString();
 
     // Broker address for hackathon demo
     // In production: real exchange/broker with RLUSD support
@@ -156,22 +157,18 @@ export class XRPLService {
       action,
       ticker,
       amountUSD,
-      currency: 'RLUSD',
+      currency: 'XRP',
       timestamp: new Date().toISOString(),
       agent: 'Hound AI Trading Agent',
       description: `Autonomous ${action} order for ${ticker} stock worth $${amountUSD} USD`,
     };
 
-    // Payment using RLUSD token (not native XRP)
+    // Payment using native XRP (testnet has balance from faucet)
     const payment: xrpl.Payment = {
       TransactionType: 'Payment',
       Account: wallet.address,
       Destination: brokerAddress,
-      Amount: {
-        currency: this.RLUSD_CURRENCY,
-        issuer: this.RLUSD_ISSUER,
-        value: rlusdAmount,
-      },
+      Amount: xrpl.xrpToDrops(xrpAmount), // Convert XRP to drops (smallest unit)
       Memos: [
         {
           Memo: {

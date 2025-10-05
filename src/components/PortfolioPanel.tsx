@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { api, UserInfo } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { api, TickerSearchResult } from '@/lib/api';
 
 interface Holding {
   ticker: string;
@@ -17,62 +17,140 @@ interface Portfolio {
 
 interface PortfolioPanelProps {
   portfolio: Portfolio | null;
-  user?: UserInfo;
+  userEmail?: string;
+  onUpdate?: () => void;
 }
 
-interface TickerSearchResult {
-  ticker: string;
-  name: string;
-  exchange: string;
-  logo: string;
-}
-
-export function PortfolioPanel({ portfolio, user }: PortfolioPanelProps) {
+export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPanelProps) {
   const [showAddTicker, setShowAddTicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [editingCash, setEditingCash] = useState(false);
   const [cashInput, setCashInput] = useState('');
 
-  const handleSearch = async (query: string) => {
-    setSearchQuery(query);
-    if (query.length < 1) {
+  // Selected ticker for adding
+  const [selectedTicker, setSelectedTicker] = useState('');
+  const [shares, setShares] = useState('');
+  const [avgPrice, setAvgPrice] = useState('');
+  const [error, setError] = useState('');
+
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Auto-search as user types
+  useEffect(() => {
+    if (searchQuery.length >= 1) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      searchTimeoutRef.current = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+          const results = await api.searchTickers(searchQuery, 10, 'stock');
+          setSearchResults(results);
+          setShowDropdown(results.length > 0);
+        } catch (error) {
+          console.error('Failed to search tickers:', error);
+          setSearchResults([]);
+          setShowDropdown(false);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300);
+    } else {
       setSearchResults([]);
+      setShowDropdown(false);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectTicker = (result: TickerSearchResult) => {
+    setSelectedTicker(result.symbol);
+    setSearchQuery('');
+    setShowDropdown(false);
+    setSearchResults([]);
+  };
+
+  const handleAddTicker = async () => {
+    if (!userEmail || !portfolio) {
+      setError('User email or portfolio not available');
       return;
     }
 
-    setIsSearching(true);
-    try {
-      const data = await api.searchTickers(query);
-      setSearchResults(data.results || []);
-    } catch (error) {
-      console.error('Failed to search tickers:', error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
+    if (!selectedTicker || !shares || !avgPrice) {
+      setError('Please fill in all fields');
+      return;
     }
-  };
 
-  const handleAddTicker = async (ticker: string) => {
+    const sharesNum = parseFloat(shares);
+    const priceNum = parseFloat(avgPrice);
+
+    if (sharesNum <= 0 || priceNum <= 0) {
+      setError('Shares and price must be positive numbers');
+      return;
+    }
+
+    if (portfolio.holdings.some(h => h.ticker === selectedTicker)) {
+      setError('Ticker already exists in portfolio');
+      return;
+    }
+
     setIsAdding(true);
+    setError('');
+
     try {
-      await api.addTicker(ticker);
+      const updatedHoldings = [
+        ...portfolio.holdings,
+        { ticker: selectedTicker, shares: sharesNum, avg_price: priceNum }
+      ];
+
+      await api.updateUserConfig(userEmail, { holdings: updatedHoldings });
+
+      // Reset form
       setShowAddTicker(false);
+      setSelectedTicker('');
+      setShares('');
+      setAvgPrice('');
       setSearchQuery('');
       setSearchResults([]);
-      // Reload the page to refresh the portfolio
-      window.location.reload();
+
+      // Trigger parent refresh
+      if (onUpdate) onUpdate();
     } catch (error: any) {
       console.error('Failed to add ticker:', error);
-      alert(error.message || 'Failed to add ticker. Please try again.');
+      setError(error.message || 'Failed to add ticker. Please try again.');
     } finally {
       setIsAdding(false);
     }
   };
 
   const handleUpdateCashBalance = async () => {
+    if (!userEmail) {
+      alert('User email not available');
+      return;
+    }
+
     const newBalance = parseFloat(cashInput);
     if (isNaN(newBalance) || newBalance < 0) {
       alert('Please enter a valid positive number');
@@ -80,11 +158,12 @@ export function PortfolioPanel({ portfolio, user }: PortfolioPanelProps) {
     }
 
     try {
-      await api.updateCashBalance(newBalance);
+      await api.updateUserConfig(userEmail, { cash_balance: newBalance });
       setEditingCash(false);
       setCashInput('');
-      // Reload the page to refresh the portfolio
-      window.location.reload();
+
+      // Trigger parent refresh
+      if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Failed to update cash balance:', error);
       alert('Failed to update cash balance. Please try again.');
@@ -118,43 +197,125 @@ export function PortfolioPanel({ portfolio, user }: PortfolioPanelProps) {
       </div>
 
       {showAddTicker && (
-        <div className="mb-4 p-4 bg-muted rounded-lg border border-border">
-          <input
-            type="text"
-            placeholder="Search for a ticker (e.g., AAPL, TSLA)"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="w-full px-4 py-2 bg-background text-foreground border border-border rounded-lg mb-2"
-          />
+        <div className="mb-4 p-4 bg-muted rounded-lg border border-border space-y-3">
+          <h3 className="font-semibold text-sm text-muted-foreground">Add New Holding</h3>
 
-          {isSearching && (
-            <p className="text-muted-foreground text-sm">Searching...</p>
-          )}
+          {/* Ticker Search */}
+          <div className="relative" ref={dropdownRef}>
+            <label className="block text-xs font-medium mb-1 text-muted-foreground">
+              Search Ticker
+            </label>
+            <input
+              type="text"
+              placeholder="Type to search (e.g., AAPL, TSLA)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 bg-background text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+              onFocus={() => searchQuery.length >= 1 && searchResults.length > 0 && setShowDropdown(true)}
+            />
+            {isSearching && (
+              <div className="absolute right-3 top-8">
+                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
 
-          {searchResults.length > 0 && (
-            <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-              {searchResults.map((result) => (
-                <div
-                  key={result.ticker}
-                  className="flex justify-between items-center p-3 bg-background rounded border border-border hover:border-accent cursor-pointer transition-colors"
-                  onClick={() => handleAddTicker(result.ticker)}
-                >
-                  <div className="flex items-center gap-3">
-                    <img src={result.logo} alt={result.ticker} className="w-8 h-8 rounded" />
-                    <div>
-                      <div className="font-bold text-accent">{result.ticker}</div>
-                      <div className="text-sm text-muted-foreground">{result.name}</div>
+            {/* Autocomplete Dropdown */}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                {searchResults.map((result) => (
+                  <button
+                    key={`${result.symbol}-${result.exchange}`}
+                    onClick={() => selectTicker(result)}
+                    className="w-full px-4 py-2 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0 flex items-center gap-3"
+                  >
+                    {result.logo && (
+                      <img
+                        src={result.logo}
+                        alt={result.symbol}
+                        className="w-8 h-8 rounded object-contain bg-white flex-shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold font-mono text-sm">{result.symbol}</div>
+                      <div className="text-xs text-muted-foreground truncate">{result.name}</div>
                     </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">{result.exchange}</div>
-                </div>
-              ))}
+                    <div className="text-xs text-muted-foreground flex-shrink-0">{result.exchange}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Selected Ticker + Details */}
+          {selectedTicker && (
+            <div className="p-3 bg-accent/10 border border-accent rounded-lg">
+              <div className="font-mono font-bold text-accent">{selectedTicker}</div>
             </div>
           )}
 
-          {!isSearching && searchQuery.length > 0 && searchResults.length === 0 && (
-            <p className="text-muted-foreground text-sm">No results found</p>
+          {/* Shares and Price */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1 text-muted-foreground">
+                Shares
+              </label>
+              <input
+                type="number"
+                value={shares}
+                onChange={(e) => setShares(e.target.value)}
+                placeholder="10"
+                min="0"
+                step="0.01"
+                className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-muted-foreground">
+                Avg Price ($)
+              </label>
+              <input
+                type="number"
+                value={avgPrice}
+                onChange={(e) => setAvgPrice(e.target.value)}
+                placeholder="150.50"
+                min="0"
+                step="0.01"
+                className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-2 bg-red-500/10 border border-red-500/50 rounded text-red-500 text-xs">
+              {error}
+            </div>
           )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleAddTicker}
+              disabled={isAdding || !selectedTicker}
+              className="flex-1 px-4 py-2 bg-accent hover:bg-accent-hover disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors text-sm"
+            >
+              {isAdding ? 'Adding...' : 'Add Holding'}
+            </button>
+            <button
+              onClick={() => {
+                setShowAddTicker(false);
+                setSelectedTicker('');
+                setShares('');
+                setAvgPrice('');
+                setSearchQuery('');
+                setError('');
+              }}
+              className="px-4 py-2 bg-background hover:bg-muted border border-border rounded-lg transition-colors text-sm"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

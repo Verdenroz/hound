@@ -285,7 +285,11 @@ export default function Home() {
           wallet={agentStatus.wallet}
         />
 
-        <PortfolioPanel portfolio={portfolio} user={user ? { email: user.email, name: user.name } : undefined} />
+        <PortfolioPanel
+          portfolio={portfolio}
+          userEmail={user?.email || undefined}
+          onUpdate={fetchData}
+        />
 
         <NewsPanel news={agentStatus.currentNews} />
 

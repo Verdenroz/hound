@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { api, TickerSearchResult } from '@/lib/api';
 
 interface OnboardingModalProps {
   email: string;
@@ -24,6 +24,63 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
   const [newAvgPrice, setNewAvgPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Ticker search autocomplete
+  const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Search for tickers as user types
+  useEffect(() => {
+    if (newTicker.length >= 1) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      searchTimeoutRef.current = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+          const results = await api.searchTickers(newTicker, 10, 'stock');
+          setSearchResults(results);
+          setShowDropdown(results.length > 0);
+        } catch (error) {
+          console.error('Failed to search tickers:', error);
+          setSearchResults([]);
+          setShowDropdown(false);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300); // Debounce 300ms
+    } else {
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [newTicker]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectTicker = (result: TickerSearchResult) => {
+    setNewTicker(result.symbol);
+    setShowDropdown(false);
+  };
 
   const addHolding = () => {
     if (!newTicker || !newShares || !newAvgPrice) {
@@ -184,13 +241,53 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
 
               {/* Add New Holding */}
               <div className="grid grid-cols-3 gap-3">
-                <input
-                  type="text"
-                  value={newTicker}
-                  onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
-                  placeholder="Ticker (e.g., AAPL)"
-                  className="px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
+                <div className="relative" ref={dropdownRef}>
+                  <input
+                    type="text"
+                    value={newTicker}
+                    onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
+                    placeholder="Ticker (e.g., AAPL)"
+                    className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
+                    onFocus={() => newTicker.length >= 1 && searchResults.length > 0 && setShowDropdown(true)}
+                  />
+                  {isSearching && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+
+                  {/* Autocomplete Dropdown */}
+                  {showDropdown && searchResults.length > 0 && (
+                    <div className="absolute z-50 w-80 mt-1 bg-card border border-border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                      {searchResults.map((result) => (
+                        <button
+                          key={`${result.symbol}-${result.exchange}`}
+                          onClick={() => selectTicker(result)}
+                          className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0 flex items-center gap-3"
+                        >
+                          {result.logo && (
+                            <img
+                              src={result.logo}
+                              alt={result.symbol}
+                              className="w-8 h-8 rounded object-contain bg-white"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          )}
+                          <div className="flex-1">
+                            <div className="font-semibold font-mono">{result.symbol}</div>
+                            <div className="text-sm text-muted-foreground">{result.name}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {result.exchange}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <input
                   type="number"
                   value={newShares}
