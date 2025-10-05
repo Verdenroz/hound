@@ -10,7 +10,7 @@ import { redis } from './services/redis';
 dotenv.config({ path: '.env.local' });
 
 const app = express();
-const PORT = process.env.BACKEND_PORT || 3001;
+const PORT = process.env.PORT || process.env.BACKEND_PORT || 3001;
 
 // Middleware
 app.use(cors());

@@ -1,0 +1,33 @@
+services:
+  # Backend API Server
+  - type: web
+    name: hound-backend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: XRPL_WALLET_SEED
+        sync: false
+      - key: XRPL_BROKER_ADDRESS
+        value: rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY
+      - key: REDIS_URL
+        fromDatabase:
+          name: hound-redis
+          property: connectionString
+    healthCheckPath: /api/health
+
+databases:
+  # Redis Database
+  - name: hound-redis
+    databaseName: hound_redis
+    region: oregon
+    plan: free
