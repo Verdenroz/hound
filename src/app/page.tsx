@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@auth0/nextjs-auth0';
 import { api, AgentStatus } from '@/lib/api';
 import { AgentStatusPanel } from '@/components/AgentStatusPanel';
@@ -8,89 +8,142 @@ import { PortfolioPanel } from '@/components/PortfolioPanel';
 import { NewsPanel } from '@/components/NewsPanel';
 import { LogsPanel } from '@/components/LogsPanel';
 import { TransactionHistory } from '@/components/TransactionHistory';
+import { OnboardingModal } from '@/components/OnboardingModal';
 import UserMenu from '@/components/UserMenu';
 
 export default function Home() {
   const { user, isLoading: authLoading } = useUser();
+  const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [portfolio, setPortfolio] = useState<any>(null);
   const [trades, setTrades] = useState<any[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Fetch initial data
+  // Check user configuration
+  useEffect(() => {
+    if (!user?.email) {
+      setIsConfigured(null);
+      return;
+    }
+
+    const checkConfig = async () => {
+      try {
+        const config = await api.getUserConfig(user.email!);
+        setIsConfigured(config.configured);
+      } catch (error) {
+        console.error('Failed to check user config:', error);
+        setIsConfigured(false);
+      }
+    };
+
+    checkConfig();
+  }, [user?.email]);
+
+  // Fetch data
   const fetchData = useCallback(async () => {
+    if (!user?.email || !isConfigured) return;
+
     try {
-      const promises = [
-        api.getAgentStatus(),
-        api.getTrades(),
-      ];
+      const [statusData, tradesData, portfolioData] = await Promise.all([
+        api.getAgentStatus(user.email),
+        api.getTrades(user.email, 50),
+        api.getPortfolio(user.email),
+      ]);
 
-      // Only fetch portfolio if user is authenticated
-      if (user) {
-        promises.push(api.getPortfolio());
-      }
-
-      const results = await Promise.all(promises);
-      setAgentStatus(results[0]);
-      setTrades(results[1].trades || []);
-
-      if (user && results[2]) {
-        setPortfolio(results[2]);
-      }
+      setAgentStatus(statusData);
+      setTrades(tradesData.trades || []);
+      setPortfolio(portfolioData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     }
-  }, [user]);
+  }, [user?.email, isConfigured]);
 
-  // Execute agent cycle when running
+  // Setup WebSocket connection
   useEffect(() => {
-    if (agentStatus?.isRunning && user) {
-      const executeCycle = async () => {
-        try {
-          await api.executeAgentCycle();
-          await fetchData();
-        } catch (error) {
-          console.error('Agent cycle error:', error);
+    if (!user?.email || !isConfigured) return;
+
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const wsUrl = backendUrl.replace('http', 'ws');
+    const ws = new WebSocket(`${wsUrl}/ws?email=${encodeURIComponent(user.email)}`);
+
+    ws.onopen = () => {
+      console.log('✅ WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        if (message.type === 'initial_state') {
+          setAgentStatus((prev) => ({
+            ...prev,
+            ...message.data,
+          } as AgentStatus));
+        } else if (message.type === 'agent_event') {
+          fetchData();
         }
-      };
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+      }
+    };
 
-      executeCycle();
-    }
-  }, [agentStatus?.isRunning, agentStatus?.state, user, fetchData]);
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
 
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    wsRef.current = ws;
+
+    return () => {
+      ws.close();
+    };
+  }, [user?.email, isConfigured, fetchData]);
+
+  // Poll data every 3 seconds
   useEffect(() => {
+    if (!isConfigured) return;
+
     fetchData();
-
-    // Poll every 2 seconds
-    const interval = setInterval(fetchData, 2000);
-
+    const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, isConfigured]);
 
   const handleStart = async () => {
+    if (!user?.email) return;
+
     setIsStarting(true);
     try {
-      await api.startAgent();
+      await api.startAgent(user.email);
       setTimeout(fetchData, 500);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start agent:', error);
-      alert('Failed to start agent. Make sure the backend is running and API keys are configured.');
+      alert(error.message || 'Failed to start agent. Make sure the backend is running and API keys are configured.');
     } finally {
       setIsStarting(false);
     }
   };
 
   const handleStop = async () => {
+    if (!user?.email) return;
+
     setIsStopping(true);
     try {
-      await api.stopAgent();
+      await api.stopAgent(user.email);
       setTimeout(fetchData, 500);
     } catch (error) {
       console.error('Failed to stop agent:', error);
     } finally {
       setIsStopping(false);
     }
+  };
+
+  const handleOnboardingComplete = () => {
+    setIsConfigured(true);
   };
 
   // Show auth loading state
@@ -133,6 +186,41 @@ export default function Home() {
     );
   }
 
+  // Show loading while checking configuration
+  if (isConfigured === null) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Checking your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show onboarding modal if not configured
+  if (!isConfigured && user.email) {
+    return (
+      <>
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+          <div className="absolute top-4 right-4">
+            <UserMenu />
+          </div>
+          <div className="text-center max-w-md">
+            <h1 className="text-5xl font-bold mb-4">
+              🐕 Hound AI Agent
+            </h1>
+            <p className="text-muted-foreground">
+              Autonomous Financial Trading Agent
+            </p>
+          </div>
+        </div>
+        <OnboardingModal email={user.email} onComplete={handleOnboardingComplete} />
+      </>
+    );
+  }
+
+  // Show loading while fetching data
   if (!agentStatus) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">

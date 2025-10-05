@@ -62,7 +62,7 @@ export class XRPLService {
     });
 
     // Balance is returned as a string in drops, convert to XRP
-    return xrpl.dropsToXrp(response.result.account_data.Balance);
+    return String(xrpl.dropsToXrp(response.result.account_data.Balance));
   }
 
   /**

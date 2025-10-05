@@ -3,7 +3,7 @@ import { AgentState, NewsArticle, GeminiAnalysis, TradingDecision, AgentLog } fr
 import { TavilyService } from '../services/tavily';
 import { GeminiService } from '../services/gemini';
 import { XRPLService } from '../services/xrpl';
-import { PortfolioService } from '../services/portfolio';
+import { redis } from '../services/redis';
 import { Logger } from '../utils/logger';
 
 export interface AgentEvent {
@@ -17,7 +17,7 @@ export class AgentOrchestrator {
   private tavily: TavilyService;
   private gemini: GeminiService;
   private xrpl: XRPLService;
-  private portfolio: PortfolioService;
+  private userEmail: string;
   private logger: Logger;
 
   private wallet: Wallet | null = null;
@@ -33,14 +33,15 @@ export class AgentOrchestrator {
   private walletSeed?: string;
 
   constructor(
+    userEmail: string,
     tavilyApiKey: string,
     geminiApiKey: string,
     walletSeed?: string
   ) {
+    this.userEmail = userEmail;
     this.tavily = new TavilyService(tavilyApiKey);
     this.gemini = new GeminiService(geminiApiKey);
     this.xrpl = new XRPLService();
-    this.portfolio = new PortfolioService();
     this.logger = new Logger();
     this.walletSeed = walletSeed;
   }
@@ -142,7 +143,14 @@ export class AgentOrchestrator {
   private async monitorNews(): Promise<void> {
     this.log('👀 Monitoring financial news...');
 
-    const tickers = this.portfolio.getTickers();
+    const portfolio = await redis.getPortfolio(this.userEmail);
+    if (!portfolio) {
+      this.log('No portfolio configured, waiting...');
+      await this.sleep(30000);
+      return;
+    }
+
+    const tickers = portfolio.holdings.map(h => h.ticker);
     const news = await this.tavily.monitorPortfolio(tickers);
 
     if (news && news.length > 0) {
@@ -179,8 +187,16 @@ export class AgentOrchestrator {
 
     this.log('🤖 Analyzing news impact with Gemini AI...');
 
+    const portfolio = await redis.getPortfolio(this.userEmail);
+    if (!portfolio) {
+      this.log('No portfolio configured');
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      return;
+    }
+
     // Determine which ticker this affects most
-    const tickers = this.portfolio.getTickers();
+    const tickers = portfolio.holdings.map(h => h.ticker);
     const affectedTicker = this.findMostAffectedTicker(this.currentNews.content, tickers);
 
     if (!affectedTicker) {
@@ -206,7 +222,7 @@ export class AgentOrchestrator {
     const analysis = await this.gemini.analyzeNewsImpact(
       fullContent,
       affectedTicker,
-      this.portfolio.getHoldings()
+      portfolio.holdings
     );
 
     this.currentAnalysis = {
@@ -274,7 +290,51 @@ export class AgentOrchestrator {
 
     const { action, ticker, amount_usd } = this.currentDecision;
 
-    const riskResult = this.portfolio.checkRisk(action, ticker, amount_usd);
+    const portfolio = await redis.getPortfolio(this.userEmail);
+    if (!portfolio) {
+      this.log('❌ No portfolio configured');
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      this.currentAnalysis = null;
+      this.currentDecision = null;
+      return;
+    }
+
+    const riskResult = {
+      sufficient_balance: true,
+      position_limit: true,
+      daily_trade_limit: true,
+      passed: true,
+    };
+
+    // Check 1: Sufficient balance for buy orders
+    if (action === 'buy') {
+      riskResult.sufficient_balance = portfolio.cash_balance >= amount_usd;
+
+      // Check 2: Position limit (max 30% in single stock)
+      const currentHolding = portfolio.holdings.find(h => h.ticker === ticker);
+      const currentHoldingValue = currentHolding ? currentHolding.shares * currentHolding.avg_price : 0;
+      const totalHoldingsValue = portfolio.holdings.reduce((sum, h) => sum + h.shares * h.avg_price, 0);
+      const totalValue = totalHoldingsValue + portfolio.cash_balance;
+
+      const newExposure = totalValue > 0
+        ? ((currentHoldingValue + amount_usd) / totalValue) * 100
+        : (amount_usd / (portfolio.cash_balance + amount_usd)) * 100;
+
+      riskResult.position_limit = newExposure <= 30; // Max 30% in single position
+    }
+
+    // Check 3: Daily trade limit (max 3 trades per day)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const trades = await redis.getTrades(this.userEmail, 100);
+    const todayTrades = trades.filter((t: any) => t.timestamp > oneDayAgo);
+    riskResult.daily_trade_limit = todayTrades.length < 3;
+
+    // Overall result
+    riskResult.passed =
+      riskResult.sufficient_balance &&
+      riskResult.position_limit &&
+      riskResult.daily_trade_limit;
 
     this.log('Risk check result', riskResult);
 
@@ -314,22 +374,69 @@ export class AgentOrchestrator {
         amount_usd
       );
 
-      // Update portfolio
-      const success = this.portfolio.executeTrade(ticker, action, shares, mockPrice);
+      // Update portfolio in Redis
+      const portfolio = await redis.getPortfolio(this.userEmail);
+      if (!portfolio) {
+        throw new Error('Portfolio not found');
+      }
 
-      if (success) {
-        this.currentDecision.xrpl_tx = xrplResult.hash;
-        this.currentDecision.explorer_link = xrplResult.explorerLink;
-
-        this.log('✅ Trade executed successfully', {
-          hash: xrplResult.hash,
-          link: xrplResult.explorerLink,
+      if (action === 'buy') {
+        // Deduct cash
+        await redis.updatePortfolio(this.userEmail, {
+          cash_balance: portfolio.cash_balance - amount_usd,
         });
 
-        this.setState(AgentState.EXPLAINING);
-      } else {
-        throw new Error('Portfolio update failed');
+        // Update or create holding
+        const existingHolding = portfolio.holdings.find(h => h.ticker === ticker);
+        if (existingHolding) {
+          const totalShares = existingHolding.shares + shares;
+          const totalCost = existingHolding.shares * existingHolding.avg_price + amount_usd;
+          await redis.updateHolding(this.userEmail, ticker, totalShares, totalCost / totalShares);
+        } else {
+          await redis.addHolding(this.userEmail, ticker, shares, mockPrice);
+        }
+
+        this.log(`✅ BUY: ${shares} shares of ${ticker} @ $${mockPrice}`);
+      } else if (action === 'sell') {
+        const holding = portfolio.holdings.find(h => h.ticker === ticker);
+        if (!holding || holding.shares < shares) {
+          throw new Error(`Insufficient shares: Need ${shares}, have ${holding?.shares || 0}`);
+        }
+
+        // Add cash
+        await redis.updatePortfolio(this.userEmail, {
+          cash_balance: portfolio.cash_balance + amount_usd,
+        });
+
+        // Update or remove holding
+        if (holding.shares === shares) {
+          await redis.removeHolding(this.userEmail, ticker);
+        } else {
+          await redis.updateHolding(this.userEmail, ticker, holding.shares - shares);
+        }
+
+        this.log(`✅ SELL: ${shares} shares of ${ticker} @ $${mockPrice}`);
       }
+
+      // Record trade
+      await redis.addTrade(this.userEmail, {
+        ticker,
+        action,
+        shares,
+        price: mockPrice,
+        xrpl_tx: xrplResult.hash,
+        explorer_link: xrplResult.explorerLink,
+      });
+
+      this.currentDecision.xrpl_tx = xrplResult.hash;
+      this.currentDecision.explorer_link = xrplResult.explorerLink;
+
+      this.log('✅ Trade executed successfully', {
+        hash: xrplResult.hash,
+        link: xrplResult.explorerLink,
+      });
+
+      this.setState(AgentState.EXPLAINING);
     } catch (error: any) {
       this.log('❌ Trade execution failed', { error: error.message });
       this.setState(AgentState.MONITORING);
@@ -397,6 +504,11 @@ export class AgentOrchestrator {
   private log(message: string, data?: any): void {
     const logEntry = this.logger.log(this.state, message, data);
     this.emitEvent('log', logEntry);
+
+    // Save log to Redis asynchronously
+    redis.addLog(this.userEmail, logEntry).catch(err => {
+      console.error('Failed to save log to Redis:', err);
+    });
   }
 
   private emitEvent(type: AgentEvent['type'], data: any): void {
@@ -412,6 +524,11 @@ export class AgentOrchestrator {
     if (this.events.length > 100) {
       this.events.shift();
     }
+
+    // Save event to Redis asynchronously
+    redis.addEvent(this.userEmail, event).catch(err => {
+      console.error('Failed to save event to Redis:', err);
+    });
 
     // Notify callbacks
     this.eventCallbacks.forEach((callback) => callback(event));
@@ -434,12 +551,12 @@ export class AgentOrchestrator {
     return this.logger.getLogs(limit);
   }
 
-  getPortfolio() {
-    return this.portfolio.getPortfolio();
+  async getPortfolio() {
+    return await redis.getPortfolio(this.userEmail);
   }
 
-  getTradeHistory(limit?: number) {
-    return this.portfolio.getTradeHistory(limit);
+  async getTradeHistory(limit?: number) {
+    return await redis.getTrades(this.userEmail, limit || 50);
   }
 
   getCurrentNews() {
