@@ -134,6 +134,15 @@ export const api = {
     return response.json();
   },
 
+  async getNews(email: string, limit?: number): Promise<any> {
+    const url = limit
+      ? `${BACKEND_URL}/api/news?email=${encodeURIComponent(email)}&limit=${limit}`
+      : `${BACKEND_URL}/api/news?email=${encodeURIComponent(email)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch news');
+    return response.json();
+  },
+
   // Portfolio operations (direct backend calls)
   async getPortfolio(email: string): Promise<any> {
     const response = await fetch(`${BACKEND_URL}/api/portfolio?email=${encodeURIComponent(email)}`);

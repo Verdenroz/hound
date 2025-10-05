@@ -158,14 +158,41 @@ export class AgentOrchestrator {
       const relevantNews = this.tavily.filterRelevantNews(news, tickers);
 
       if (relevantNews.length > 0) {
-        // Find the most impactful news
+        // Find the most impactful news that hasn't been processed recently
         const sortedNews = relevantNews.sort((a, b) => (b.score || 0) - (a.score || 0));
-        this.currentNews = sortedNews[0];
+
+        // Check for unprocessed news
+        let unprocessedNews = null;
+        for (const article of sortedNews) {
+          const alreadyProcessed = await redis.hasProcessedNews(this.userEmail, article.url);
+          if (!alreadyProcessed) {
+            unprocessedNews = article;
+            break;
+          }
+        }
+
+        if (!unprocessedNews) {
+          this.log('All relevant news already processed, waiting for new articles');
+          await this.sleep(30000);
+          return;
+        }
+
+        this.currentNews = unprocessedNews;
 
         this.log('📰 Relevant news detected', {
           title: this.currentNews.title,
           url: this.currentNews.url,
           score: this.currentNews.score,
+        });
+
+        // Mark as processed immediately to prevent duplicate processing
+        await redis.markNewsAsProcessed(this.userEmail, this.currentNews.url).catch(err => {
+          console.error('Failed to mark news as processed:', err);
+        });
+
+        // Persist news to Redis for historical tracking
+        await redis.addNews(this.userEmail, this.currentNews).catch(err => {
+          console.error('Failed to save news to Redis:', err);
         });
 
         this.setState(AgentState.ANALYZING);

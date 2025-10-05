@@ -44,25 +44,51 @@ export class TavilyService {
         `${this.baseUrl}/search`,
         {
           api_key: this.apiKey,
-          query: `${query} stock market financial news`,
+          query: `${query} latest news article`,
           search_depth: 'advanced',
-          max_results: maxResults,
+          max_results: maxResults * 2,
+          topic: 'news', // Explicitly request news content only
           include_domains: [
             'reuters.com',
             'bloomberg.com',
             'cnbc.com',
             'marketwatch.com',
-            'finance.yahoo.com',
             'wsj.com',
+            'benzinga.com',
+            'seekingalpha.com',
+            'thestreet.com',
+            'fool.com',
+          ],
+          exclude_domains: [
+            'finance.yahoo.com/quote',
+            'finance.yahoo.com/screener',
+            'finance.yahoo.com/lookup',
           ],
           include_answer: true,
           include_raw_content: false,
         }
       );
 
-      console.log(`🔍 Tavily Search: Found ${response.data.results.length} articles for "${query}"`);
+      // Filter out quote pages, screeners, and stats pages
+      const newsArticles = response.data.results
+        .filter((result) => {
+          const url = result.url.toLowerCase();
+          // Exclude quote pages, screeners, lookup pages
+          if (url.includes('/quote/') || url.includes('/screener') ||
+              url.includes('/lookup') || url.includes('/chart') ||
+              url.includes('/statistics') || url.includes('/profile')) {
+            return false;
+          }
+          // Include only paths that look like news articles
+          return url.includes('/news') || url.includes('/article') ||
+                 url.includes('/story') || url.includes('2024') ||
+                 url.includes('2025') || result.content.length > 200;
+        })
+        .slice(0, maxResults);
 
-      return response.data.results.map((result) => ({
+      console.log(`🔍 Tavily Search: Found ${newsArticles.length} news articles for "${query}" (filtered from ${response.data.results.length})`);
+
+      return newsArticles.map((result) => ({
         title: result.title,
         url: result.url,
         content: result.content,

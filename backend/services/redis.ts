@@ -324,6 +324,55 @@ class RedisService {
     return events.map((e) => JSON.parse(e));
   }
 
+  // News methods
+  async addNews(email: string, newsArticle: any): Promise<void> {
+    const newsKey = `news:${email}`;
+    const newsUrlsKey = `news_urls:${email}`;
+
+    // Check if this URL was already stored
+    const urlExists = await this.client.sismember(newsUrlsKey, newsArticle.url);
+    if (urlExists) {
+      console.log(`📰 Skipping duplicate news URL: ${newsArticle.url}`);
+      return;
+    }
+
+    const newsData = JSON.stringify({
+      ...newsArticle,
+      timestamp: Date.now(),
+    });
+
+    await this.client.lpush(newsKey, newsData);
+    await this.client.ltrim(newsKey, 0, 99); // Keep last 100 news articles
+
+    // Track URL to prevent storage duplicates
+    await this.client.sadd(newsUrlsKey, newsArticle.url);
+    await this.client.expire(newsUrlsKey, TTL_SECONDS);
+
+    await this.setTTL(newsKey);
+  }
+
+  async getNews(email: string, limit: number = 20) {
+    const newsKey = `news:${email}`;
+    const news = await this.client.lrange(newsKey, 0, limit - 1);
+    await this.setTTL(newsKey);
+
+    return news.map((n) => JSON.parse(n));
+  }
+
+  // Track recently processed news URLs to prevent duplicates
+  async hasProcessedNews(email: string, newsUrl: string): Promise<boolean> {
+    const processedKey = `processed_news:${email}`;
+    const exists = await this.client.sismember(processedKey, newsUrl);
+    return exists === 1;
+  }
+
+  async markNewsAsProcessed(email: string, newsUrl: string): Promise<void> {
+    const processedKey = `processed_news:${email}`;
+    await this.client.sadd(processedKey, newsUrl);
+    // Keep processed URLs for 24 hours to prevent re-processing
+    await this.client.expire(processedKey, 24 * 60 * 60);
+  }
+
   // Agent session methods
   async startAgentSession(email: string): Promise<string> {
     const sessionKey = `agent_session:${email}`;

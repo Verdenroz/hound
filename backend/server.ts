@@ -161,6 +161,34 @@ app.put('/api/user/configure', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/api/portfolio/holding', async (req: Request, res: Response) => {
+  try {
+    const { email, ticker } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (!ticker) {
+      return res.status(400).json({ error: 'Ticker is required' });
+    }
+
+    // Check if user has config
+    const hasConfig = await redis.hasUserConfig(email);
+    if (!hasConfig) {
+      return res.status(400).json({ error: 'User not configured' });
+    }
+
+    await redis.removeHolding(email, ticker);
+
+    const portfolio = await redis.getPortfolio(email);
+    res.json({ success: true, portfolio });
+  } catch (error: any) {
+    console.error('Error removing holding:', error);
+    res.status(500).json({ error: 'Failed to remove holding' });
+  }
+});
+
 app.get('/api/agent/status', async (req: Request, res: Response) => {
   try {
     const email = req.query.email as string;
@@ -319,6 +347,23 @@ app.get('/api/events', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/news', async (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const news = await redis.getNews(email, limit);
+    res.json({ news });
+  } catch (error: any) {
+    console.error('Error fetching news:', error);
+    res.status(500).json({ error: 'Failed to fetch news' });
+  }
+});
+
 // Ticker search endpoint using finance-query API
 app.get('/api/tickers/search', async (req: Request, res: Response) => {
   try {
@@ -460,6 +505,7 @@ async function start() {
       console.log(`   GET  /api/trades`);
       console.log(`   GET  /api/logs`);
       console.log(`   GET  /api/events`);
+      console.log(`   GET  /api/news`);
       console.log(`   GET  /api/tickers/search`);
       console.log('\n💡 Multi-user agent system ready');
     });
