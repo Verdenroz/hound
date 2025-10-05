@@ -78,6 +78,16 @@ export const api = {
     return response.json();
   },
 
+  async removeHolding(email: string, ticker: string): Promise<any> {
+    const response = await fetch(`${BACKEND_URL}/api/portfolio/holding`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, ticker }),
+    });
+    if (!response.ok) throw new Error('Failed to remove holding');
+    return response.json();
+  },
+
   // Agent operations (direct backend calls)
   async getAgentStatus(email: string): Promise<AgentStatus> {
     const response = await fetch(`${BACKEND_URL}/api/agent/status?email=${encodeURIComponent(email)}`);

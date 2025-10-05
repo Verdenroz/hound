@@ -325,14 +325,46 @@ export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPane
           const percentage = ((value / totalValue) * 100).toFixed(1);
 
           return (
-            <div key={holding.ticker} className="flex justify-between items-center p-3 bg-muted rounded border border-border">
+            <div key={holding.ticker} className="flex justify-between items-center p-3 bg-muted rounded border border-border group hover:border-accent transition-colors">
               <div>
                 <span className="font-bold text-lg text-accent">{holding.ticker}</span>
                 <span className="text-muted-foreground ml-2">{holding.shares} shares</span>
               </div>
-              <div className="text-right">
-                <div className="font-semibold">${value.toFixed(2)}</div>
-                <div className="text-sm text-muted-foreground">@${holding.avg_price} ({percentage}%)</div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="font-semibold">${value.toFixed(2)}</div>
+                  <div className="text-sm text-muted-foreground">@${holding.avg_price} ({percentage}%)</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!userEmail) return;
+                    if (confirm(`Remove ${holding.ticker} from portfolio?`)) {
+                      try {
+                        await api.removeHolding(userEmail, holding.ticker);
+                        if (onUpdate) onUpdate();
+                      } catch (error) {
+                        console.error('Failed to remove holding:', error);
+                        alert('Failed to remove holding. Please try again.');
+                      }
+                    }
+                  }}
+                  className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded text-xs transition-all"
+                  title="Remove holding"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
               </div>
             </div>
           );
