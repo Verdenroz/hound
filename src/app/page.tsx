@@ -291,7 +291,7 @@ export default function Home() {
           onUpdate={fetchData}
         />
 
-        <NewsPanel news={agentStatus.currentNews} />
+        <NewsPanel userEmail={user?.email || undefined} />
 
         <LogsPanel logs={agentStatus.logs || []} />
       </div>

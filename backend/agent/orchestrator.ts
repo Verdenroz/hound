@@ -3,6 +3,7 @@ import { AgentState, NewsArticle, GeminiAnalysis, TradingDecision, AgentLog } fr
 import { TavilyService } from '../services/tavily';
 import { GeminiService } from '../services/gemini';
 import { XRPLService } from '../services/xrpl';
+import { FinanceService } from '../services/finance';
 import { redis } from '../services/redis';
 import { Logger } from '../utils/logger';
 
@@ -17,6 +18,7 @@ export class AgentOrchestrator {
   private tavily: TavilyService;
   private gemini: GeminiService;
   private xrpl: XRPLService;
+  private finance: FinanceService;
   private userEmail: string;
   private logger: Logger;
 
@@ -42,6 +44,7 @@ export class AgentOrchestrator {
     this.tavily = new TavilyService(tavilyApiKey);
     this.gemini = new GeminiService(geminiApiKey);
     this.xrpl = new XRPLService();
+    this.finance = new FinanceService();
     this.logger = new Logger();
     this.walletSeed = walletSeed;
   }
@@ -291,9 +294,32 @@ export class AgentOrchestrator {
 
     const { action, amount_usd, reasoning, ticker } = this.currentAnalysis;
 
-    // Calculate shares (using mock price of $100 for demo)
-    const mockPrice = 100;
-    const shares = Math.floor(amount_usd / mockPrice);
+    // Fetch real-time stock price
+    let currentPrice: number;
+    try {
+      currentPrice = await this.finance.getStockPrice(ticker);
+      this.log('📊 Real-time price fetched', { ticker, price: currentPrice });
+    } catch (error: any) {
+      this.log('❌ Failed to fetch real-time price, aborting decision', { error: error.message });
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      this.currentAnalysis = null;
+      return;
+    }
+
+    // Calculate shares based on real price
+    const shares = Math.floor(amount_usd / currentPrice);
+
+    if (shares <= 0) {
+      this.log('❌ Cannot execute trade: amount too small for current price', {
+        amount_usd,
+        price: currentPrice,
+      });
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      this.currentAnalysis = null;
+      return;
+    }
 
     this.currentDecision = {
       action: action as 'buy' | 'sell',
@@ -301,6 +327,7 @@ export class AgentOrchestrator {
       shares,
       amount_usd,
       reasoning,
+      price: currentPrice, // Store the price used for decision
     };
 
     this.log('✅ Decision made', this.currentDecision);
@@ -315,7 +342,7 @@ export class AgentOrchestrator {
 
     this.log('🛡️ Performing risk checks...');
 
-    const { action, ticker, amount_usd } = this.currentDecision;
+    const { action, ticker, amount_usd, price } = this.currentDecision;
 
     const portfolio = await redis.getPortfolio(this.userEmail);
     if (!portfolio) {
@@ -327,58 +354,134 @@ export class AgentOrchestrator {
       return;
     }
 
-    const riskResult = {
-      sufficient_balance: true,
-      position_limit: true,
-      daily_trade_limit: true,
-      passed: true,
-    };
+    if (!price) {
+      this.log('❌ No price available for risk check');
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      this.currentAnalysis = null;
+      this.currentDecision = null;
+      return;
+    }
 
-    // Check 1: Sufficient balance for buy orders
+    // Check daily trade limit first (hard stop)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const trades = await redis.getTrades(this.userEmail, 100);
+    const todayTrades = trades.filter((t: any) => t.timestamp > oneDayAgo);
+
+    if (todayTrades.length >= 3) {
+      this.log('❌ Daily trade limit reached (3 trades)', { todayTrades: todayTrades.length });
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      this.currentAnalysis = null;
+      this.currentDecision = null;
+      return;
+    }
+
+    // Adjust trade amount based on available resources
+    let adjustedAmountUSD = amount_usd;
+    let adjustedShares = this.currentDecision.shares;
+
     if (action === 'buy') {
-      riskResult.sufficient_balance = portfolio.cash_balance >= amount_usd;
+      // Calculate maximum we can afford
+      const availableCash = portfolio.cash_balance;
 
-      // Check 2: Position limit (max 30% in single stock)
+      if (availableCash < 1) {
+        this.log('❌ Insufficient cash balance', { available: availableCash });
+        this.setState(AgentState.MONITORING);
+        this.currentNews = null;
+        this.currentAnalysis = null;
+        this.currentDecision = null;
+        return;
+      }
+
+      // Use minimum of requested amount or available cash
+      const maxAffordable = Math.min(amount_usd, availableCash);
+
+      // Check position limit with adjusted amount (max 30% in single stock)
       const currentHolding = portfolio.holdings.find(h => h.ticker === ticker);
       const currentHoldingValue = currentHolding ? currentHolding.shares * currentHolding.avg_price : 0;
       const totalHoldingsValue = portfolio.holdings.reduce((sum, h) => sum + h.shares * h.avg_price, 0);
       const totalValue = totalHoldingsValue + portfolio.cash_balance;
 
       const newExposure = totalValue > 0
-        ? ((currentHoldingValue + amount_usd) / totalValue) * 100
-        : (amount_usd / (portfolio.cash_balance + amount_usd)) * 100;
+        ? ((currentHoldingValue + maxAffordable) / totalValue) * 100
+        : (maxAffordable / (portfolio.cash_balance + maxAffordable)) * 100;
 
-      riskResult.position_limit = newExposure <= 30; // Max 30% in single position
+      // If position limit exceeded, reduce to max 30%
+      if (newExposure > 30) {
+        const maxAllowedValue = (totalValue * 0.30) - currentHoldingValue;
+        adjustedAmountUSD = Math.max(1, maxAllowedValue);
+        this.log('⚠️ Position limit adjustment', {
+          original: amount_usd,
+          adjusted: adjustedAmountUSD,
+          reason: 'Max 30% position size',
+        });
+      } else {
+        adjustedAmountUSD = maxAffordable;
+      }
+
+      // Recalculate shares based on adjusted amount
+      adjustedShares = Math.floor(adjustedAmountUSD / price);
+
+      if (adjustedShares <= 0) {
+        this.log('❌ Adjusted amount too small to buy even 1 share', {
+          adjustedAmount: adjustedAmountUSD,
+          price,
+        });
+        this.setState(AgentState.MONITORING);
+        this.currentNews = null;
+        this.currentAnalysis = null;
+        this.currentDecision = null;
+        return;
+      }
+
+      if (adjustedAmountUSD < amount_usd) {
+        this.log('💰 Adjusting BUY order to available funds', {
+          requested: amount_usd,
+          adjusted: adjustedAmountUSD,
+          shares: adjustedShares,
+        });
+      }
+
+    } else if (action === 'sell') {
+      // Check how many shares we actually have
+      const holding = portfolio.holdings.find(h => h.ticker === ticker);
+
+      if (!holding || holding.shares <= 0) {
+        this.log('❌ No shares to sell', { ticker });
+        this.setState(AgentState.MONITORING);
+        this.currentNews = null;
+        this.currentAnalysis = null;
+        this.currentDecision = null;
+        return;
+      }
+
+      // Sell at most what we have
+      const maxSellable = Math.min(this.currentDecision.shares, holding.shares);
+      adjustedShares = maxSellable;
+      adjustedAmountUSD = adjustedShares * price;
+
+      if (adjustedShares < this.currentDecision.shares) {
+        this.log('💰 Adjusting SELL order to available shares', {
+          requested: this.currentDecision.shares,
+          adjusted: adjustedShares,
+          available: holding.shares,
+        });
+      }
     }
 
-    // Check 3: Daily trade limit (max 3 trades per day)
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const trades = await redis.getTrades(this.userEmail, 100);
-    const todayTrades = trades.filter((t: any) => t.timestamp > oneDayAgo);
-    riskResult.daily_trade_limit = todayTrades.length < 3;
+    // Update decision with adjusted values
+    this.currentDecision.shares = adjustedShares;
+    this.currentDecision.amount_usd = adjustedAmountUSD;
 
-    // Overall result
-    riskResult.passed =
-      riskResult.sufficient_balance &&
-      riskResult.position_limit &&
-      riskResult.daily_trade_limit;
+    this.log('✅ Risk checks passed, proceeding to execution', {
+      action,
+      ticker,
+      shares: adjustedShares,
+      amount: adjustedAmountUSD,
+    });
 
-    this.log('Risk check result', riskResult);
-
-    if (riskResult.passed) {
-      this.log('✅ Risk checks passed, proceeding to execution');
-      this.setState(AgentState.EXECUTING);
-    } else {
-      this.log('❌ Risk check failed, aborting trade', {
-        sufficient_balance: riskResult.sufficient_balance,
-        position_limit: riskResult.position_limit,
-        daily_trade_limit: riskResult.daily_trade_limit,
-      });
-      this.setState(AgentState.MONITORING);
-      this.currentNews = null;
-      this.currentAnalysis = null;
-      this.currentDecision = null;
-    }
+    this.setState(AgentState.EXECUTING);
   }
 
   private async executeTrade(): Promise<void> {
@@ -389,8 +492,19 @@ export class AgentOrchestrator {
 
     this.log('⚡ Executing trade on XRPL blockchain...');
 
-    const { action, ticker, shares, amount_usd } = this.currentDecision;
-    const mockPrice = 100;
+    const { action, ticker, shares, price } = this.currentDecision;
+
+    if (!price) {
+      this.log('❌ No price available for trade execution');
+      this.setState(AgentState.MONITORING);
+      this.currentNews = null;
+      this.currentAnalysis = null;
+      this.currentDecision = null;
+      return;
+    }
+
+    // Calculate exact trade value based on shares and price
+    const exactTradeValue = shares * price;
 
     try {
       // Execute on XRPL
@@ -398,7 +512,7 @@ export class AgentOrchestrator {
         this.wallet,
         action,
         ticker,
-        amount_usd
+        exactTradeValue
       );
 
       // Update portfolio in Redis
@@ -408,31 +522,31 @@ export class AgentOrchestrator {
       }
 
       if (action === 'buy') {
-        // Deduct cash
+        // Deduct exact cash amount
         await redis.updatePortfolio(this.userEmail, {
-          cash_balance: portfolio.cash_balance - amount_usd,
+          cash_balance: portfolio.cash_balance - exactTradeValue,
         });
 
         // Update or create holding
         const existingHolding = portfolio.holdings.find(h => h.ticker === ticker);
         if (existingHolding) {
           const totalShares = existingHolding.shares + shares;
-          const totalCost = existingHolding.shares * existingHolding.avg_price + amount_usd;
+          const totalCost = existingHolding.shares * existingHolding.avg_price + exactTradeValue;
           await redis.updateHolding(this.userEmail, ticker, totalShares, totalCost / totalShares);
         } else {
-          await redis.addHolding(this.userEmail, ticker, shares, mockPrice);
+          await redis.addHolding(this.userEmail, ticker, shares, price);
         }
 
-        this.log(`✅ BUY: ${shares} shares of ${ticker} @ $${mockPrice}`);
+        this.log(`✅ BUY: ${shares} shares of ${ticker} @ $${price.toFixed(2)} (Total: $${exactTradeValue.toFixed(2)})`);
       } else if (action === 'sell') {
         const holding = portfolio.holdings.find(h => h.ticker === ticker);
         if (!holding || holding.shares < shares) {
           throw new Error(`Insufficient shares: Need ${shares}, have ${holding?.shares || 0}`);
         }
 
-        // Add cash
+        // Add exact cash amount
         await redis.updatePortfolio(this.userEmail, {
-          cash_balance: portfolio.cash_balance + amount_usd,
+          cash_balance: portfolio.cash_balance + exactTradeValue,
         });
 
         // Update or remove holding
@@ -442,7 +556,7 @@ export class AgentOrchestrator {
           await redis.updateHolding(this.userEmail, ticker, holding.shares - shares);
         }
 
-        this.log(`✅ SELL: ${shares} shares of ${ticker} @ $${mockPrice}`);
+        this.log(`✅ SELL: ${shares} shares of ${ticker} @ $${price.toFixed(2)} (Total: $${exactTradeValue.toFixed(2)})`);
       }
 
       // Record trade
@@ -450,7 +564,7 @@ export class AgentOrchestrator {
         ticker,
         action,
         shares,
-        price: mockPrice,
+        price,
         xrpl_tx: xrplResult.hash,
         explorer_link: xrplResult.explorerLink,
       });

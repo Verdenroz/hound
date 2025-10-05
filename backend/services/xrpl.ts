@@ -143,10 +143,22 @@ export class XRPLService {
   ): Promise<XRPLTransaction> {
     await this.connect();
 
-    // Use XRP for testnet demo (automatically funded via faucet)
-    // Convert USD amount to XRP (approximate 1:1 for demo purposes)
-    // In production: use RLUSD or real exchange rates
-    const xrpAmount = amountUSD.toString();
+    // Check wallet balance first
+    const balanceXRP = parseFloat(await this.getBalance(wallet.address));
+
+    // XRP Ledger requires minimum 10 XRP reserve + transaction fees
+    const RESERVE_XRP = 10;
+    const availableXRP = balanceXRP - RESERVE_XRP;
+
+    if (availableXRP <= 0) {
+      throw new Error(`Insufficient XRP balance. Current: ${balanceXRP} XRP, Need: ${RESERVE_XRP} XRP reserve + payment amount`);
+    }
+
+    // Use a symbolic small payment (1-5 XRP) to represent the trade on-chain
+    // This is for demo purposes - in production, would use RLUSD or actual value
+    const symbolPaymentXRP = Math.min(5, availableXRP * 0.1); // Max 5 XRP or 10% of available
+
+    console.log(`💰 Wallet Balance: ${balanceXRP} XRP, Available: ${availableXRP} XRP, Payment: ${symbolPaymentXRP} XRP`);
 
     // Broker address for hackathon demo
     // In production: real exchange/broker with RLUSD support
@@ -157,10 +169,11 @@ export class XRPLService {
       action,
       ticker,
       amountUSD,
+      xrpSymbolicPayment: symbolPaymentXRP,
       currency: 'XRP',
       timestamp: new Date().toISOString(),
       agent: 'Hound AI Trading Agent',
-      description: `Autonomous ${action} order for ${ticker} stock worth $${amountUSD} USD`,
+      description: `Autonomous ${action} order for ${ticker} stock worth $${amountUSD} USD (${symbolPaymentXRP} XRP symbolic payment)`,
     };
 
     // Payment using native XRP (testnet has balance from faucet)
@@ -168,7 +181,7 @@ export class XRPLService {
       TransactionType: 'Payment',
       Account: wallet.address,
       Destination: brokerAddress,
-      Amount: xrpl.xrpToDrops(xrpAmount), // Convert XRP to drops (smallest unit)
+      Amount: xrpl.xrpToDrops(symbolPaymentXRP.toFixed(6)), // Convert XRP to drops (smallest unit)
       Memos: [
         {
           Memo: {

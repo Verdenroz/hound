@@ -50,6 +50,7 @@ export interface TradingDecision {
   ticker: string;
   shares: number;
   amount_usd: number;
+  price?: number; // Real-time stock price at decision time
   reasoning: string;
   xrpl_tx?: string;
   explorer_link?: string;
