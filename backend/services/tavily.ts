@@ -95,8 +95,9 @@ export class TavilyService {
         score: result.score,
         published_date: result.published_date,
       }));
-    } catch (error: any) {
-      console.error('❌ Tavily Search Error:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Tavily Search Error:', errorMessage);
       return [];
     }
   }
@@ -128,8 +129,9 @@ export class TavilyService {
         url: extracted.url,
         content: extracted.raw_content,
       };
-    } catch (error: any) {
-      console.error('❌ Tavily Extract Error:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Tavily Extract Error:', errorMessage);
       return null;
     }
   }

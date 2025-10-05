@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { api, TickerSearchResult } from '@/lib/api';
 
 interface OnboardingModalProps {
@@ -127,8 +128,9 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
     try {
       await api.createUserConfig(email, balance, riskTolerance, holdings);
       onComplete();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save configuration');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save configuration';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -143,7 +145,7 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
             🐕 Welcome to Hound AI!
           </h2>
           <p className="text-muted-foreground">
-            Let's set up your autonomous trading portfolio
+            Let&apos;s set up your autonomous trading portfolio
           </p>
         </div>
 
@@ -182,7 +184,7 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
                 <option value="aggressive">Aggressive - High risk, high reward</option>
               </select>
               <p className="text-xs text-muted-foreground mt-1">
-                This affects the agent's trading decisions
+                This affects the agent&apos;s trading decisions
               </p>
             </div>
 
@@ -266,13 +268,13 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
                           className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0 flex items-center gap-3"
                         >
                           {result.logo && (
-                            <img
+                            <Image
                               src={result.logo}
                               alt={result.symbol}
+                              width={32}
+                              height={32}
                               className="w-8 h-8 rounded object-contain bg-white"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
+                              unoptimized
                             />
                           )}
                           <div className="flex-1">

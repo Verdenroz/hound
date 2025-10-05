@@ -1,4 +1,6 @@
 import Redis from 'ioredis';
+import { Trade, NewsArticle, AgentLog } from '../utils/types';
+import { AgentEvent } from '../agent/orchestrator';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 const TTL_DAYS = 30;
@@ -121,7 +123,7 @@ class RedisService {
 
     // Update portfolio settings
     if (updates.cash_balance !== undefined || updates.risk_tolerance !== undefined) {
-      const updateData: any = {};
+      const updateData: Record<string, string> = {};
       if (updates.cash_balance !== undefined) {
         updateData.cash_balance = updates.cash_balance.toString();
       }
@@ -191,7 +193,7 @@ class RedisService {
     onboarding_completed?: boolean;
   }): Promise<void> {
     const portfolioKey = `portfolio:${email}`;
-    const updateData: any = {};
+    const updateData: Record<string, string> = {};
 
     if (updates.cash_balance !== undefined) {
       updateData.cash_balance = updates.cash_balance.toString();
@@ -262,7 +264,7 @@ class RedisService {
   }
 
   // Trades methods
-  async addTrade(email: string, trade: any): Promise<void> {
+  async addTrade(email: string, trade: Partial<Trade>): Promise<void> {
     const tradesKey = `trades:${email}`;
     const tradeData = JSON.stringify({
       ...trade,
@@ -283,7 +285,7 @@ class RedisService {
   }
 
   // Logs methods
-  async addLog(email: string, log: any): Promise<void> {
+  async addLog(email: string, log: Omit<AgentLog, 'timestamp'>): Promise<void> {
     const logsKey = `logs:${email}`;
     const logData = JSON.stringify({
       ...log,
@@ -304,7 +306,7 @@ class RedisService {
   }
 
   // Events methods
-  async addEvent(email: string, event: any): Promise<void> {
+  async addEvent(email: string, event: Omit<AgentEvent, 'timestamp'>): Promise<void> {
     const eventsKey = `events:${email}`;
     const eventData = JSON.stringify({
       ...event,
@@ -325,7 +327,7 @@ class RedisService {
   }
 
   // News methods
-  async addNews(email: string, newsArticle: any): Promise<void> {
+  async addNews(email: string, newsArticle: NewsArticle): Promise<void> {
     const newsKey = `news:${email}`;
     const newsUrlsKey = `news_urls:${email}`;
 

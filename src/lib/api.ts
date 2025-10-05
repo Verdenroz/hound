@@ -6,11 +6,11 @@ export interface AgentStatus {
   state: string;
   isRunning: boolean;
   wallet: string | null;
-  portfolio: any;
-  logs: any[];
-  currentNews: any;
-  currentAnalysis: any;
-  currentDecision: any;
+  portfolio: unknown;
+  logs: unknown[];
+  currentNews: unknown;
+  currentAnalysis: unknown;
+  currentDecision: unknown;
 }
 
 export interface UserConfig {
@@ -43,7 +43,7 @@ export const api = {
     cashBalance: number,
     riskTolerance: string,
     holdings: Array<{ ticker: string; shares: number; avg_price: number }> = []
-  ): Promise<any> {
+  ): Promise<unknown> {
     const response = await fetch(`${BACKEND_URL}/api/user/configure`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,7 +68,7 @@ export const api = {
       risk_tolerance?: string;
       holdings?: Array<{ ticker: string; shares: number; avg_price: number }>;
     }
-  ): Promise<any> {
+  ): Promise<unknown> {
     const response = await fetch(`${BACKEND_URL}/api/user/configure`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -78,7 +78,7 @@ export const api = {
     return response.json();
   },
 
-  async removeHolding(email: string, ticker: string): Promise<any> {
+  async removeHolding(email: string, ticker: string): Promise<unknown> {
     const response = await fetch(`${BACKEND_URL}/api/portfolio/holding`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -117,7 +117,7 @@ export const api = {
   },
 
   // User data operations (direct backend calls)
-  async getTrades(email: string, limit?: number): Promise<any> {
+  async getTrades(email: string, limit?: number): Promise<unknown> {
     const url = limit
       ? `${BACKEND_URL}/api/trades?email=${encodeURIComponent(email)}&limit=${limit}`
       : `${BACKEND_URL}/api/trades?email=${encodeURIComponent(email)}`;
@@ -126,7 +126,7 @@ export const api = {
     return response.json();
   },
 
-  async getLogs(email: string, limit?: number): Promise<any> {
+  async getLogs(email: string, limit?: number): Promise<unknown> {
     const url = limit
       ? `${BACKEND_URL}/api/logs?email=${encodeURIComponent(email)}&limit=${limit}`
       : `${BACKEND_URL}/api/logs?email=${encodeURIComponent(email)}`;
@@ -135,7 +135,7 @@ export const api = {
     return response.json();
   },
 
-  async getEvents(email: string, limit?: number): Promise<any> {
+  async getEvents(email: string, limit?: number): Promise<unknown> {
     const url = limit
       ? `${BACKEND_URL}/api/events?email=${encodeURIComponent(email)}&limit=${limit}`
       : `${BACKEND_URL}/api/events?email=${encodeURIComponent(email)}`;
@@ -144,7 +144,7 @@ export const api = {
     return response.json();
   },
 
-  async getNews(email: string, limit?: number): Promise<any> {
+  async getNews(email: string, limit?: number): Promise<unknown> {
     const url = limit
       ? `${BACKEND_URL}/api/news?email=${encodeURIComponent(email)}&limit=${limit}`
       : `${BACKEND_URL}/api/news?email=${encodeURIComponent(email)}`;
@@ -154,7 +154,7 @@ export const api = {
   },
 
   // Portfolio operations (direct backend calls)
-  async getPortfolio(email: string): Promise<any> {
+  async getPortfolio(email: string): Promise<unknown> {
     const response = await fetch(`${BACKEND_URL}/api/portfolio?email=${encodeURIComponent(email)}`);
     if (!response.ok) {
       if (response.status === 404) return null;

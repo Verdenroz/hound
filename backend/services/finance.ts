@@ -40,8 +40,9 @@ export class FinanceService {
 
       console.log(`💰 Real-time price for ${ticker}: $${price}`);
       return price;
-    } catch (error: any) {
-      console.error(`❌ Failed to fetch price for ${ticker}:`, error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ Failed to fetch price for ${ticker}:`, errorMessage);
       throw new Error(`Failed to fetch stock price for ${ticker}`);
     }
   }
@@ -70,8 +71,9 @@ export class FinanceService {
 
       console.log(`💰 Fetched ${prices.size} real-time prices`);
       return prices;
-    } catch (error: any) {
-      console.error('❌ Failed to fetch stock prices:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Failed to fetch stock prices:', errorMessage);
       throw new Error('Failed to fetch stock prices');
     }
   }
@@ -93,8 +95,9 @@ export class FinanceService {
       }
 
       return response.data[0];
-    } catch (error: any) {
-      console.error(`❌ Failed to fetch quote for ${ticker}:`, error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ Failed to fetch quote for ${ticker}:`, errorMessage);
       return null;
     }
   }

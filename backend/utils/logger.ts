@@ -4,7 +4,7 @@ export class Logger {
   private logs: AgentLog[] = [];
   private maxLogs: number = 1000;
 
-  log(state: AgentState, message: string, data?: any): AgentLog {
+  log(state: AgentState, message: string, data?: unknown): AgentLog {
     const logEntry: AgentLog = {
       timestamp: new Date().toISOString(),
       state,

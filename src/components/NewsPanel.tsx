@@ -29,7 +29,7 @@ export function NewsPanel({ userEmail }: NewsPanelProps) {
 
     const fetchNews = async () => {
       try {
-        const response = await api.getNews(userEmail, 10);
+        const response = await api.getNews(userEmail, 10) as { news: NewsArticle[] };
         setNews(response.news || []);
       } catch (error) {
         console.error('Failed to fetch news:', error);

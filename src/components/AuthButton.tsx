@@ -1,6 +1,7 @@
 'use client';
 
 import { useUser } from '@auth0/nextjs-auth0';
+import Image from 'next/image';
 
 export default function AuthButton() {
   const { user, isLoading } = useUser();
@@ -19,10 +20,13 @@ export default function AuthButton() {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           {user.picture && (
-            <img
+            <Image
               src={user.picture}
               alt={user.name || 'User'}
+              width={32}
+              height={32}
               className="w-8 h-8 rounded-full border border-border"
+              unoptimized
             />
           )}
           <span className="text-sm">{user.name || user.email}</span>

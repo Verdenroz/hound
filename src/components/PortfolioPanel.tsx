@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { api, TickerSearchResult } from '@/lib/api';
 
 interface Holding {
@@ -137,9 +138,10 @@ export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPane
 
       // Trigger parent refresh
       if (onUpdate) onUpdate();
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add ticker. Please try again.';
       console.error('Failed to add ticker:', error);
-      setError(error.message || 'Failed to add ticker. Please try again.');
+      setError(errorMessage);
     } finally {
       setIsAdding(false);
     }
@@ -229,13 +231,13 @@ export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPane
                     className="w-full px-4 py-2 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0 flex items-center gap-3"
                   >
                     {result.logo && (
-                      <img
+                      <Image
                         src={result.logo}
                         alt={result.symbol}
+                        width={32}
+                        height={32}
                         className="w-8 h-8 rounded object-contain bg-white flex-shrink-0"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
+                        unoptimized
                       />
                     )}
                     <div className="flex-1 min-w-0">

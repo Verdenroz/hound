@@ -3,7 +3,7 @@ import { GeminiAnalysis, Holding, NewsArticle, TradingDecision } from '../utils/
 
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
-  private model: any;
+  private model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
 
   constructor(apiKey: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
@@ -84,8 +84,9 @@ Now analyze the provided news:`;
       }
 
       throw new Error('Invalid response format from Gemini');
-    } catch (error: any) {
-      console.error('❌ Gemini Analysis Error:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Gemini Analysis Error:', errorMessage);
 
       // Return safe default
       return {
@@ -128,8 +129,9 @@ Now generate the explanation:`;
       console.log('📝 Gemini Explanation Generated');
 
       return explanation;
-    } catch (error: any) {
-      console.error('❌ Gemini Explanation Error:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Gemini Explanation Error:', errorMessage);
 
       // Return fallback explanation
       return `I analyzed news about ${decision.ticker} with an impact score of ${analysis.impact_score}/10. Based on ${analysis.sentiment} sentiment and ${(analysis.confidence * 100).toFixed(0)}% confidence, I decided to ${decision.action} ${decision.shares} shares for $${decision.amount_usd}. ${decision.xrpl_tx ? `Transaction hash: ${decision.xrpl_tx}` : ''}`;
@@ -158,8 +160,9 @@ Provide a 2-3 sentence summary of the overall market sentiment and key trends.`;
     try {
       const result = await this.model.generateContent(prompt);
       return result.response.text().trim();
-    } catch (error: any) {
-      console.error('❌ Gemini Summary Error:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Gemini Summary Error:', errorMessage);
       return 'Unable to generate market summary at this time.';
     }
   }
@@ -199,7 +202,7 @@ Respond in JSON format:
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-    } catch (error) {
+    } catch {
       // Fallback risk assessment
       if (exposurePercent > 20) {
         return {

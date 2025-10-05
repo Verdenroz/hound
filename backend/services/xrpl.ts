@@ -90,7 +90,7 @@ export class XRPLService {
       const result = await this.client.submitAndWait(signed.tx_blob);
 
       if (result.result.meta && typeof result.result.meta === 'object') {
-        const meta = result.result.meta as any;
+        const meta = result.result.meta as unknown as Record<string, unknown>;
         if (meta.TransactionResult === 'tesSUCCESS') {
           console.log('✅ RLUSD trustline established');
           return true;
@@ -99,13 +99,14 @@ export class XRPLService {
 
       console.log('⚠️  Trustline setup failed (may already exist)');
       return false;
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Trustline may already exist - that's okay
-      if (error.message?.includes('tecDUPLICATE')) {
+      if (errorMessage.includes('tecDUPLICATE')) {
         console.log('✅ RLUSD trustline already exists');
         return true;
       }
-      console.error('❌ Trustline setup error:', error.message);
+      console.error('❌ Trustline setup error:', errorMessage);
       return false;
     }
   }
@@ -124,13 +125,13 @@ export class XRPLService {
       });
 
       const rlusdLine = response.result.lines.find(
-        (line: any) =>
+        (line) =>
           line.currency === this.RLUSD_CURRENCY &&
           line.account === this.RLUSD_ISSUER
       );
 
-      return rlusdLine ? rlusdLine.balance : '0';
-    } catch (error) {
+      return rlusdLine ? String(rlusdLine.balance) : '0';
+    } catch {
       return '0';
     }
   }
@@ -205,7 +206,7 @@ export class XRPLService {
       const result = await this.client.submitAndWait(signed.tx_blob);
 
       if (result.result.meta && typeof result.result.meta === 'object') {
-        const meta = result.result.meta as any;
+        const meta = result.result.meta as unknown as Record<string, unknown>;
 
         if (meta.TransactionResult === 'tesSUCCESS') {
           const hash = result.result.hash;
@@ -217,13 +218,14 @@ export class XRPLService {
 
           return { hash, explorerLink };
         } else {
-          throw new Error(`Transaction failed: ${meta.TransactionResult}`);
+          throw new Error(`Transaction failed: ${String(meta.TransactionResult)}`);
         }
       } else {
         throw new Error('Invalid transaction result');
       }
-    } catch (error: any) {
-      console.error('❌ XRPL Transaction Failed:', error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ XRPL Transaction Failed:', errorMessage);
       throw error;
     }
   }

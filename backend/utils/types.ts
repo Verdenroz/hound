@@ -26,6 +26,8 @@ export interface Trade {
   shares: number;
   price: number;
   timestamp: number;
+  xrpl_tx?: string;
+  explorer_link?: string;
 }
 
 export interface NewsArticle {
@@ -60,7 +62,7 @@ export interface AgentLog {
   timestamp: string;
   state: AgentState;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 export interface XRPLTransaction {

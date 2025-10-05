@@ -81,7 +81,7 @@ app.get('/api/user/configure', async (req: Request, res: Response) => {
       configured: true,
       config: portfolio,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching user config:', error);
     res.status(500).json({ error: 'Failed to fetch user configuration' });
   }
@@ -119,7 +119,7 @@ app.post('/api/user/configure', async (req: Request, res: Response) => {
 
     const portfolio = await redis.getPortfolio(email);
     res.json({ success: true, portfolio });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating user config:', error);
     res.status(500).json({ error: 'Failed to create user configuration' });
   }
@@ -140,7 +140,11 @@ app.put('/api/user/configure', async (req: Request, res: Response) => {
     }
 
     // Update config
-    const updates: any = {};
+    const updates: {
+      cash_balance?: number;
+      risk_tolerance?: string;
+      holdings?: Array<{ ticker: string; shares: number; avg_price: number }>;
+    } = {};
     if (cash_balance !== undefined) {
       updates.cash_balance = parseFloat(cash_balance);
     }
@@ -155,7 +159,7 @@ app.put('/api/user/configure', async (req: Request, res: Response) => {
 
     const portfolio = await redis.getPortfolio(email);
     res.json({ success: true, portfolio });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating user config:', error);
     res.status(500).json({ error: 'Failed to update user configuration' });
   }
@@ -183,7 +187,7 @@ app.delete('/api/portfolio/holding', async (req: Request, res: Response) => {
 
     const portfolio = await redis.getPortfolio(email);
     res.json({ success: true, portfolio });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error removing holding:', error);
     res.status(500).json({ error: 'Failed to remove holding' });
   }
@@ -217,7 +221,7 @@ app.get('/api/agent/status', async (req: Request, res: Response) => {
       currentAnalysis: agent.getCurrentAnalysis(),
       currentDecision: agent.getCurrentDecision(),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching agent status:', error);
     res.status(500).json({ error: 'Failed to fetch agent status' });
   }
@@ -246,7 +250,7 @@ app.post('/api/agent/start', async (req: Request, res: Response) => {
     await agent.start();
 
     res.json({ success: true, message: 'Agent started' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error starting agent:', error);
     res.status(500).json({ error: 'Failed to start agent' });
   }
@@ -269,7 +273,7 @@ app.post('/api/agent/stop', async (req: Request, res: Response) => {
     agent.stop();
 
     res.json({ success: true, message: 'Agent stopped' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error stopping agent:', error);
     res.status(500).json({ error: 'Failed to stop agent' });
   }
@@ -290,7 +294,7 @@ app.get('/api/portfolio', async (req: Request, res: Response) => {
     }
 
     res.json(portfolio);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching portfolio:', error);
     res.status(500).json({ error: 'Failed to fetch portfolio' });
   }
@@ -307,7 +311,7 @@ app.get('/api/trades', async (req: Request, res: Response) => {
 
     const trades = await redis.getTrades(email, limit);
     res.json({ trades });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching trades:', error);
     res.status(500).json({ error: 'Failed to fetch trades' });
   }
@@ -324,7 +328,7 @@ app.get('/api/logs', async (req: Request, res: Response) => {
 
     const logs = await redis.getLogs(email, limit);
     res.json({ logs });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching logs:', error);
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
@@ -341,7 +345,7 @@ app.get('/api/events', async (req: Request, res: Response) => {
 
     const events = await redis.getEvents(email, limit);
     res.json({ events });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching events:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
   }
@@ -358,7 +362,7 @@ app.get('/api/news', async (req: Request, res: Response) => {
 
     const news = await redis.getNews(email, limit);
     res.json({ news });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching news:', error);
     res.status(500).json({ error: 'Failed to fetch news' });
   }
@@ -390,7 +394,7 @@ app.get('/api/tickers/search', async (req: Request, res: Response) => {
 
     const results = await response.json();
     res.json(results);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error searching tickers:', error);
     res.status(500).json({ error: 'Failed to search tickers' });
   }
@@ -474,7 +478,7 @@ wss.on('connection', (ws: UserWebSocket, req) => {
   });
 });
 
-function broadcastToUserClients(email: string, message: any) {
+function broadcastToUserClients(email: string, message: unknown) {
   const data = JSON.stringify(message);
   const userClients = clients.get(email);
 

@@ -11,12 +11,39 @@ import { TransactionHistory } from '@/components/TransactionHistory';
 import { OnboardingModal } from '@/components/OnboardingModal';
 import UserMenu from '@/components/UserMenu';
 
+interface Holding {
+  ticker: string;
+  shares: number;
+  avg_price: number;
+}
+
+interface Portfolio {
+  holdings: Holding[];
+  cash_balance: number;
+  risk_tolerance: string;
+}
+
+interface Trade {
+  ticker: string;
+  action: 'buy' | 'sell';
+  shares: number;
+  price: number;
+  timestamp: number;
+}
+
+interface AgentLog {
+  timestamp: string;
+  state: string;
+  message: string;
+  data?: unknown;
+}
+
 export default function Home() {
   const { user, isLoading: authLoading } = useUser();
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
-  const [portfolio, setPortfolio] = useState<any>(null);
-  const [trades, setTrades] = useState<any[]>([]);
+  const [portfolio, setPortfolio] = useState<unknown>(null);
+  const [trades, setTrades] = useState<unknown[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -53,7 +80,7 @@ export default function Home() {
       ]);
 
       setAgentStatus(statusData);
-      setTrades(tradesData.trades || []);
+      setTrades((tradesData as { trades: unknown[] }).trades || []);
       setPortfolio(portfolioData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -120,9 +147,10 @@ export default function Home() {
     try {
       await api.startAgent(user.email);
       setTimeout(fetchData, 500);
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start agent. Make sure the backend is running and API keys are configured.';
       console.error('Failed to start agent:', error);
-      alert(error.message || 'Failed to start agent. Make sure the backend is running and API keys are configured.');
+      alert(errorMessage);
     } finally {
       setIsStarting(false);
     }
@@ -286,17 +314,17 @@ export default function Home() {
         />
 
         <PortfolioPanel
-          portfolio={portfolio}
+          portfolio={portfolio as Portfolio | null}
           userEmail={user?.email || undefined}
           onUpdate={fetchData}
         />
 
         <NewsPanel userEmail={user?.email || undefined} />
 
-        <LogsPanel logs={agentStatus.logs || []} />
+        <LogsPanel logs={agentStatus.logs as AgentLog[] || []} />
       </div>
 
-      <TransactionHistory trades={trades} />
+      <TransactionHistory trades={trades as Trade[]} />
 
       <footer className="mt-8 pt-6 border-t border-gray-800 text-center text-gray-500 text-sm">
         <p>

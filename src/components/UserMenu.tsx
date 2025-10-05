@@ -3,6 +3,7 @@
 import { useUser } from '@auth0/nextjs-auth0';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 
 export default function UserMenu() {
   const { user, isLoading } = useUser();
@@ -40,10 +41,13 @@ export default function UserMenu() {
         className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-colors"
       >
         {user.picture && (
-          <img
+          <Image
             src={user.picture}
             alt={user.name || 'User'}
+            width={32}
+            height={32}
             className="w-8 h-8 rounded-full border border-border"
+            unoptimized
           />
         )}
         <svg

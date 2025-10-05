@@ -6,7 +6,7 @@ interface AgentLog {
   timestamp: string;
   state: string;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 interface LogsPanelProps {
@@ -48,13 +48,13 @@ export function LogsPanel({ logs }: LogsPanelProps) {
                     <span className="flex-1">{log.message}</span>
                   </div>
 
-                  {log.data && Object.keys(log.data).length > 0 && (
+                  {log.data && typeof log.data === 'object' && Object.keys(log.data).length > 0 ? (
                     <div className="text-muted-foreground ml-4 mt-1 text-xs">
                       <pre className="whitespace-pre-wrap break-words">
                         {JSON.stringify(log.data, null, 2)}
                       </pre>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               );
             })}

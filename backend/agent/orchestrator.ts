@@ -1,5 +1,5 @@
 import { Wallet } from 'xrpl';
-import { AgentState, NewsArticle, GeminiAnalysis, TradingDecision, AgentLog } from '../utils/types';
+import { AgentState, NewsArticle, GeminiAnalysis, TradingDecision, AgentLog, Trade } from '../utils/types';
 import { TavilyService } from '../services/tavily';
 import { GeminiService } from '../services/gemini';
 import { XRPLService } from '../services/xrpl';
@@ -9,7 +9,7 @@ import { Logger } from '../utils/logger';
 
 export interface AgentEvent {
   type: 'log' | 'stateChange' | 'tradeComplete' | 'error';
-  data: any;
+  data: unknown;
   timestamp: number;
 }
 
@@ -134,9 +134,10 @@ export class AgentOrchestrator {
         }
 
         await this.sleep(1000);
-      } catch (error: any) {
-        this.log('Error in agent loop', { error: error.message });
-        this.emitEvent('error', { message: error.message, state: this.state });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.log('Error in agent loop', { error: errorMessage });
+        this.emitEvent('error', { message: errorMessage, state: this.state });
         this.setState(AgentState.MONITORING);
         await this.sleep(5000);
       }
@@ -157,12 +158,32 @@ export class AgentOrchestrator {
     const news = await this.tavily.monitorPortfolio(tickers);
 
     if (news && news.length > 0) {
+      // Log all news articles found
+      this.log(`📰 Found ${news.length} news articles`, {
+        articles: news.map(article => ({
+          title: article.title,
+          url: article.url,
+          score: article.score,
+        }))
+      });
+
       // Filter for high-relevance news
       const relevantNews = this.tavily.filterRelevantNews(news, tickers);
 
       if (relevantNews.length > 0) {
+        this.log(`📊 ${relevantNews.length} articles relevant to portfolio tickers`);
+
         // Find the most impactful news that hasn't been processed recently
         const sortedNews = relevantNews.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        // Log sorted relevant news
+        this.log('🔍 Relevant news (sorted by score)', {
+          articles: sortedNews.map(article => ({
+            title: article.title,
+            score: article.score,
+            processed: false, // Will check next
+          }))
+        });
 
         // Check for unprocessed news
         let unprocessedNews = null;
@@ -182,7 +203,7 @@ export class AgentOrchestrator {
 
         this.currentNews = unprocessedNews;
 
-        this.log('📰 Relevant news detected', {
+        this.log('✅ Selected news for analysis', {
           title: this.currentNews.title,
           url: this.currentNews.url,
           score: this.currentNews.score,
@@ -299,8 +320,9 @@ export class AgentOrchestrator {
     try {
       currentPrice = await this.finance.getStockPrice(ticker);
       this.log('📊 Real-time price fetched', { ticker, price: currentPrice });
-    } catch (error: any) {
-      this.log('❌ Failed to fetch real-time price, aborting decision', { error: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.log('❌ Failed to fetch real-time price, aborting decision', { error: errorMessage });
       this.setState(AgentState.MONITORING);
       this.currentNews = null;
       this.currentAnalysis = null;
@@ -366,7 +388,7 @@ export class AgentOrchestrator {
     // Check daily trade limit first (hard stop)
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     const trades = await redis.getTrades(this.userEmail, 100);
-    const todayTrades = trades.filter((t: any) => t.timestamp > oneDayAgo);
+    const todayTrades = trades.filter((t: Trade) => t.timestamp > oneDayAgo);
 
     if (todayTrades.length >= 3) {
       this.log('❌ Daily trade limit reached (3 trades)', { todayTrades: todayTrades.length });
@@ -578,8 +600,9 @@ export class AgentOrchestrator {
       });
 
       this.setState(AgentState.EXPLAINING);
-    } catch (error: any) {
-      this.log('❌ Trade execution failed', { error: error.message });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.log('❌ Trade execution failed', { error: errorMessage });
       this.setState(AgentState.MONITORING);
       this.currentNews = null;
       this.currentAnalysis = null;
@@ -642,7 +665,7 @@ export class AgentOrchestrator {
     this.emitEvent('stateChange', { oldState, newState });
   }
 
-  private log(message: string, data?: any): void {
+  private log(message: string, data?: unknown): void {
     const logEntry = this.logger.log(this.state, message, data);
     this.emitEvent('log', logEntry);
 
@@ -652,7 +675,7 @@ export class AgentOrchestrator {
     });
   }
 
-  private emitEvent(type: AgentEvent['type'], data: any): void {
+  private emitEvent(type: AgentEvent['type'], data: unknown): void {
     const event: AgentEvent = {
       type,
       data,
