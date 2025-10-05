@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { Trash2, Plus, X, Check, Pencil } from 'lucide-react';
 import { api, TickerSearchResult } from '@/lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
 interface Holding {
   ticker: string;
@@ -31,6 +38,8 @@ export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPane
   const [isAdding, setIsAdding] = useState(false);
   const [editingCash, setEditingCash] = useState(false);
   const [cashInput, setCashInput] = useState('');
+  const [editingRisk, setEditingRisk] = useState(false);
+  const [riskInput, setRiskInput] = useState('');
 
   // Selected ticker for adding
   const [selectedTicker, setSelectedTicker] = useState('');
@@ -172,12 +181,38 @@ export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPane
     }
   };
 
+  const handleUpdateRiskTolerance = async () => {
+    if (!userEmail) {
+      alert('User email not available');
+      return;
+    }
+
+    if (!['conservative', 'moderate', 'aggressive'].includes(riskInput)) {
+      alert('Please select a valid risk tolerance');
+      return;
+    }
+
+    try {
+      await api.updateUserConfig(userEmail, { risk_tolerance: riskInput });
+      setEditingRisk(false);
+      setRiskInput('');
+
+      // Trigger parent refresh
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error('Failed to update risk tolerance:', error);
+      alert('Failed to update risk tolerance. Please try again.');
+    }
+  };
+
   if (!portfolio) {
     return (
-      <div className="bg-card rounded-lg p-6 border border-border">
-        <h2 className="text-2xl font-bold mb-4">Portfolio</h2>
-        <p className="text-muted-foreground">Loading portfolio...</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Portfolio</CardTitle>
+          <CardDescription>Loading portfolio...</CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
 
@@ -187,244 +222,305 @@ export function PortfolioPanel({ portfolio, userEmail, onUpdate }: PortfolioPane
   ) + portfolio.cash_balance;
 
   return (
-    <div className="bg-card rounded-lg p-6 border border-border">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Portfolio</h2>
-        <button
-          onClick={() => setShowAddTicker(!showAddTicker)}
-          className="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg font-semibold transition-colors text-sm"
-        >
-          {showAddTicker ? 'Cancel' : '+ Add Ticker'}
-        </button>
-      </div>
-
-      {showAddTicker && (
-        <div className="mb-4 p-4 bg-muted rounded-lg border border-border space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">Add New Holding</h3>
-
-          {/* Ticker Search */}
-          <div className="relative" ref={dropdownRef}>
-            <label className="block text-xs font-medium mb-1 text-muted-foreground">
-              Search Ticker
-            </label>
-            <input
-              type="text"
-              placeholder="Type to search (e.g., AAPL, TSLA)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 bg-background text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-              onFocus={() => searchQuery.length >= 1 && searchResults.length > 0 && setShowDropdown(true)}
-            />
-            {isSearching && (
-              <div className="absolute right-3 top-8">
-                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-
-            {/* Autocomplete Dropdown */}
-            {showDropdown && searchResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                {searchResults.map((result) => (
-                  <button
-                    key={`${result.symbol}-${result.exchange}`}
-                    onClick={() => selectTicker(result)}
-                    className="w-full px-4 py-2 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0 flex items-center gap-3"
-                  >
-                    {result.logo && (
-                      <Image
-                        src={result.logo}
-                        alt={result.symbol}
-                        width={32}
-                        height={32}
-                        className="w-8 h-8 rounded object-contain bg-white flex-shrink-0"
-                        unoptimized
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold font-mono text-sm">{result.symbol}</div>
-                      <div className="text-xs text-muted-foreground truncate">{result.name}</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground flex-shrink-0">{result.exchange}</div>
-                  </button>
-                ))}
-              </div>
-            )}
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Portfolio</CardTitle>
+            <CardDescription>Manage your holdings and settings</CardDescription>
           </div>
-
-          {/* Selected Ticker + Details */}
-          {selectedTicker && (
-            <div className="p-3 bg-accent/10 border border-accent rounded-lg">
-              <div className="font-mono font-bold text-accent">{selectedTicker}</div>
-            </div>
-          )}
-
-          {/* Shares and Price */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1 text-muted-foreground">
-                Shares
-              </label>
-              <input
-                type="number"
-                value={shares}
-                onChange={(e) => setShares(e.target.value)}
-                placeholder="10"
-                min="0"
-                step="0.01"
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-muted-foreground">
-                Avg Price ($)
-              </label>
-              <input
-                type="number"
-                value={avgPrice}
-                onChange={(e) => setAvgPrice(e.target.value)}
-                placeholder="150.50"
-                min="0"
-                step="0.01"
-                className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="p-2 bg-red-500/10 border border-red-500/50 rounded text-red-500 text-xs">
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleAddTicker}
-              disabled={isAdding || !selectedTicker}
-              className="flex-1 px-4 py-2 bg-accent hover:bg-accent-hover disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors text-sm"
-            >
-              {isAdding ? 'Adding...' : 'Add Holding'}
-            </button>
-            <button
-              onClick={() => {
-                setShowAddTicker(false);
-                setSelectedTicker('');
-                setShares('');
-                setAvgPrice('');
-                setSearchQuery('');
-                setError('');
-              }}
-              className="px-4 py-2 bg-background hover:bg-muted border border-border rounded-lg transition-colors text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {portfolio.holdings.map((holding) => {
-          const value = holding.shares * holding.avg_price;
-          const percentage = ((value / totalValue) * 100).toFixed(1);
-
-          return (
-            <div key={holding.ticker} className="flex justify-between items-center p-3 bg-muted rounded border border-border group hover:border-accent transition-colors">
-              <div>
-                <span className="font-bold text-lg text-accent">{holding.ticker}</span>
-                <span className="text-muted-foreground ml-2">{holding.shares} shares</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <div className="font-semibold">${value.toFixed(2)}</div>
-                  <div className="text-sm text-muted-foreground">@${holding.avg_price} ({percentage}%)</div>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!userEmail) return;
-                    if (confirm(`Remove ${holding.ticker} from portfolio?`)) {
-                      try {
-                        await api.removeHolding(userEmail, holding.ticker);
-                        if (onUpdate) onUpdate();
-                      } catch (error) {
-                        console.error('Failed to remove holding:', error);
-                        alert('Failed to remove holding. Please try again.');
-                      }
-                    }
-                  }}
-                  className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded text-xs transition-all"
-                  title="Remove holding"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        <div className="border-t border-border pt-3 mt-3">
-          <div className="flex justify-between items-center font-bold p-3 bg-muted rounded border border-border">
-            <span className="text-accent">Cash Balance</span>
-            {editingCash ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={cashInput}
-                  onChange={(e) => setCashInput(e.target.value)}
-                  placeholder={portfolio.cash_balance.toFixed(2)}
-                  className="w-32 px-2 py-1 bg-background text-foreground border border-border rounded text-sm"
-                  autoFocus
-                />
-                <button
-                  onClick={handleUpdateCashBalance}
-                  className="px-3 py-1 bg-accent hover:bg-accent-hover text-white rounded text-sm"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingCash(false);
-                    setCashInput('');
-                  }}
-                  className="px-3 py-1 bg-muted hover:bg-border text-foreground rounded text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
+          <Button
+            onClick={() => setShowAddTicker(!showAddTicker)}
+            variant={showAddTicker ? "outline" : "default"}
+            size="sm"
+          >
+            {showAddTicker ? (
+              <>
+                <X className="h-4 w-4" />
+                Cancel
+              </>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-accent">${portfolio.cash_balance.toFixed(2)}</span>
-                <button
-                  onClick={() => {
-                    setEditingCash(true);
-                    setCashInput(portfolio.cash_balance.toString());
-                  }}
-                  className="px-2 py-1 bg-accent/20 hover:bg-accent/30 text-accent rounded text-xs"
-                >
-                  Edit
-                </button>
-              </div>
+              <>
+                <Plus className="h-4 w-4" />
+                Add Ticker
+              </>
             )}
-          </div>
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {showAddTicker && (
+          <Card className="bg-muted/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Add New Holding</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Ticker Search */}
+              <div className="relative" ref={dropdownRef}>
+                <label className="block text-xs font-medium mb-1.5 text-muted-foreground">
+                  Search Ticker
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Type to search (e.g., AAPL, TSLA)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => searchQuery.length >= 1 && searchResults.length > 0 && setShowDropdown(true)}
+                />
+                {isSearching && (
+                  <div className="absolute right-3 top-8">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+
+                {/* Autocomplete Dropdown */}
+                {showDropdown && searchResults.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-card border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {searchResults.map((result) => (
+                      <button
+                        key={`${result.symbol}-${result.exchange}`}
+                        onClick={() => selectTicker(result)}
+                        className="w-full px-4 py-2 text-left hover:bg-muted transition-colors border-b last:border-b-0 flex items-center gap-3"
+                      >
+                        {result.logo && (
+                          <Image
+                            src={result.logo}
+                            alt={result.symbol}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded object-contain bg-white flex-shrink-0"
+                            unoptimized
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold font-mono text-sm">{result.symbol}</div>
+                          <div className="text-xs text-muted-foreground truncate">{result.name}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex-shrink-0">{result.exchange}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected Ticker */}
+              {selectedTicker && (
+                <div className="p-3 bg-primary/10 border border-primary rounded-lg">
+                  <Badge variant="outline" className="font-mono font-bold">{selectedTicker}</Badge>
+                </div>
+              )}
+
+              {/* Shares and Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5 text-muted-foreground">
+                    Shares
+                  </label>
+                  <Input
+                    type="number"
+                    value={shares}
+                    onChange={(e) => setShares(e.target.value)}
+                    placeholder="10"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1.5 text-muted-foreground">
+                    Avg Price ($)
+                  </label>
+                  <Input
+                    type="number"
+                    value={avgPrice}
+                    onChange={(e) => setAvgPrice(e.target.value)}
+                    placeholder="150.50"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-2 bg-destructive/10 border border-destructive/50 rounded text-destructive text-xs">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  onClick={handleAddTicker}
+                  disabled={isAdding || !selectedTicker}
+                  className="flex-1"
+                  size="sm"
+                >
+                  <Check className="h-4 w-4" />
+                  {isAdding ? 'Adding...' : 'Add Holding'}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowAddTicker(false);
+                    setSelectedTicker('');
+                    setShares('');
+                    setAvgPrice('');
+                    setSearchQuery('');
+                    setError('');
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Holdings List */}
+        <div className="space-y-2">
+          {portfolio.holdings.map((holding) => {
+            const value = holding.shares * holding.avg_price;
+            const percentage = ((value / totalValue) * 100).toFixed(1);
+
+            return (
+              <div key={holding.ticker} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg border group hover:border-primary/50 transition-all">
+                <div className="flex items-center gap-3">
+                  <Badge variant="secondary" className="font-mono font-bold text-base px-3">
+                    {holding.ticker}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">{holding.shares} shares</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="font-semibold">${value.toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground">@${holding.avg_price} • {percentage}%</div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      if (!userEmail) return;
+                      if (confirm(`Remove ${holding.ticker} from portfolio?`)) {
+                        try {
+                          await api.removeHolding(userEmail, holding.ticker);
+                          if (onUpdate) onUpdate();
+                        } catch (error) {
+                          console.error('Failed to remove holding:', error);
+                          alert('Failed to remove holding. Please try again.');
+                        }
+                      }
+                    }}
+                    variant="ghost"
+                    size="icon-sm"
+                    className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        <div className="border-t border-border pt-3 mt-3">
-          <div className="flex justify-between font-bold text-lg p-3 bg-accent/10 rounded border border-accent">
-            <span>Total Value</span>
-            <span>${totalValue.toFixed(2)}</span>
-          </div>
+        <Separator />
+
+        {/* Cash Balance */}
+        <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg border">
+          <span className="font-semibold">Cash Balance</span>
+          {editingCash ? (
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={cashInput}
+                onChange={(e) => setCashInput(e.target.value)}
+                placeholder={portfolio.cash_balance.toFixed(2)}
+                className="w-32 h-8"
+                autoFocus
+              />
+              <Button onClick={handleUpdateCashBalance} size="icon-sm" variant="default">
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditingCash(false);
+                  setCashInput('');
+                }}
+                size="icon-sm"
+                variant="outline"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-lg">${portfolio.cash_balance.toFixed(2)}</span>
+              <Button
+                onClick={() => {
+                  setEditingCash(true);
+                  setCashInput(portfolio.cash_balance.toString());
+                }}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
+
+        {/* Risk Tolerance */}
+        <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg border">
+          <span className="font-semibold">Risk Tolerance</span>
+          {editingRisk ? (
+            <div className="flex items-center gap-2">
+              <Select value={riskInput} onValueChange={setRiskInput}>
+                <SelectTrigger className="w-40 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="conservative">Conservative</SelectItem>
+                  <SelectItem value="moderate">Moderate</SelectItem>
+                  <SelectItem value="aggressive">Aggressive</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleUpdateRiskTolerance} size="icon-sm" variant="default">
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditingRisk(false);
+                  setRiskInput('');
+                }}
+                size="icon-sm"
+                variant="outline"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="capitalize">{portfolio.risk_tolerance}</Badge>
+              <Button
+                onClick={() => {
+                  setEditingRisk(true);
+                  setRiskInput(portfolio.risk_tolerance);
+                }}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Total Value */}
+        <div className="flex justify-between items-center p-4 bg-primary/10 rounded-lg border border-primary">
+          <span className="text-lg font-bold">Total Value</span>
+          <span className="text-xl font-bold font-mono">${totalValue.toFixed(2)}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

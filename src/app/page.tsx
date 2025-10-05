@@ -306,23 +306,28 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-6">
-        <AgentStatusPanel
-          state={agentStatus.state}
-          isRunning={agentStatus.isRunning}
-          wallet={agentStatus.wallet}
-        />
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        {/* Left Column: Agent Status + News */}
+        <div className="space-y-6">
+          <AgentStatusPanel
+            state={agentStatus.state}
+            isRunning={agentStatus.isRunning}
+            wallet={agentStatus.wallet}
+          />
 
+          <NewsPanel userEmail={user?.email || undefined} />
+        </div>
+
+        {/* Right Column: Portfolio */}
         <PortfolioPanel
           portfolio={portfolio as Portfolio | null}
           userEmail={user?.email || undefined}
           onUpdate={fetchData}
         />
-
-        <NewsPanel userEmail={user?.email || undefined} />
-
-        <LogsPanel logs={agentStatus.logs as AgentLog[] || []} />
       </div>
+
+      {/* Logs - Full Width */}
+      <LogsPanel logs={agentStatus.logs as AgentLog[] || []} />
 
       <TransactionHistory trades={trades as Trade[]} />
 

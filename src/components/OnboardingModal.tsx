@@ -2,7 +2,23 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { ArrowRight, ArrowLeft, Check, Search, X } from 'lucide-react';
 import { api, TickerSearchResult } from '@/lib/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
 interface OnboardingModalProps {
   email: string;
@@ -137,210 +153,252 @@ export function OnboardingModal({ email, onComplete }: OnboardingModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-lg max-w-2xl w-full p-8 shadow-2xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">
+    <Dialog open={true} modal>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="text-3xl flex items-center gap-2">
             🐕 Welcome to Hound AI!
-          </h2>
-          <p className="text-muted-foreground">
+          </DialogTitle>
+          <DialogDescription className="text-base">
             Let&apos;s set up your autonomous trading portfolio
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Step 1: Cash Balance & Risk */}
         {step === 1 && (
           <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Initial Cash Balance (USD)
-              </label>
-              <input
-                type="number"
-                value={cashBalance}
-                onChange={(e) => setCashBalance(e.target.value)}
-                className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                placeholder="10000"
-                min="0"
-                step="100"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                This is your starting capital for trading
-              </p>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Initial Configuration</CardTitle>
+                <CardDescription>Set your starting capital and risk preferences</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cash-balance">Initial Cash Balance (USD)</Label>
+                  <Input
+                    id="cash-balance"
+                    type="number"
+                    value={cashBalance}
+                    onChange={(e) => setCashBalance(e.target.value)}
+                    placeholder="10000"
+                    min="0"
+                    step="100"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This is your starting capital for trading
+                  </p>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Risk Tolerance
-              </label>
-              <select
-                value={riskTolerance}
-                onChange={(e) => setRiskTolerance(e.target.value)}
-                className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                <option value="conservative">Conservative - Low risk, steady returns</option>
-                <option value="moderate">Moderate - Balanced approach</option>
-                <option value="aggressive">Aggressive - High risk, high reward</option>
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                This affects the agent&apos;s trading decisions
-              </p>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="risk-tolerance">Risk Tolerance</Label>
+                  <Select value={riskTolerance} onValueChange={setRiskTolerance}>
+                    <SelectTrigger id="risk-tolerance">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="conservative">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">Conservative</span>
+                          <span className="text-xs text-muted-foreground">Low risk, steady returns</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="moderate">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">Moderate</span>
+                          <span className="text-xs text-muted-foreground">Balanced approach</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="aggressive">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">Aggressive</span>
+                          <span className="text-xs text-muted-foreground">High risk, high reward</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    This affects the agent&apos;s trading decisions
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
+              <div className="p-3 bg-destructive/10 border border-destructive/50 rounded-lg text-destructive text-sm">
                 {error}
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                onClick={() => setStep(2)}
-                className="px-6 py-3 bg-accent hover:bg-accent-hover text-white rounded-lg font-semibold transition-colors"
-              >
-                Next: Portfolio Holdings →
-              </button>
-            </div>
+            <DialogFooter>
+              <Button onClick={() => setStep(2)} size="lg">
+                Next: Portfolio Holdings
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </DialogFooter>
           </div>
         )}
 
         {/* Step 2: Portfolio Holdings */}
         {step === 2 && (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4">
-                Portfolio Holdings (Optional)
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Add stocks you want the AI agent to monitor and trade. You can skip this and let the agent build your portfolio.
-              </p>
-
-              {/* Existing Holdings */}
-              {holdings.length > 0 && (
-                <div className="mb-4 space-y-2">
-                  {holdings.map((holding) => (
-                    <div
-                      key={holding.ticker}
-                      className="flex items-center justify-between p-3 bg-background border border-border rounded-lg"
-                    >
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono font-bold">{holding.ticker}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {holding.shares} shares @ ${holding.avg_price.toFixed(2)}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => removeHolding(holding.ticker)}
-                        className="text-red-500 hover:text-red-400 text-sm"
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Portfolio Holdings (Optional)</CardTitle>
+                <CardDescription>
+                  Add stocks you want the AI agent to monitor and trade. You can skip this and let the agent build your portfolio.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Existing Holdings */}
+                {holdings.length > 0 && (
+                  <div className="space-y-2">
+                    {holdings.map((holding) => (
+                      <div
+                        key={holding.ticker}
+                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border"
                       >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add New Holding */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="relative" ref={dropdownRef}>
-                  <input
-                    type="text"
-                    value={newTicker}
-                    onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
-                    placeholder="Ticker (e.g., AAPL)"
-                    className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                    onFocus={() => newTicker.length >= 1 && searchResults.length > 0 && setShowDropdown(true)}
-                  />
-                  {isSearching && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  )}
-
-                  {/* Autocomplete Dropdown */}
-                  {showDropdown && searchResults.length > 0 && (
-                    <div className="absolute z-50 w-80 mt-1 bg-card border border-border rounded-lg shadow-xl max-h-64 overflow-y-auto">
-                      {searchResults.map((result) => (
-                        <button
-                          key={`${result.symbol}-${result.exchange}`}
-                          onClick={() => selectTicker(result)}
-                          className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b border-border last:border-b-0 flex items-center gap-3"
+                        <div className="flex items-center gap-4">
+                          <Badge variant="secondary" className="font-mono font-bold">
+                            {holding.ticker}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {holding.shares} shares @ ${holding.avg_price.toFixed(2)}
+                          </span>
+                        </div>
+                        <Button
+                          onClick={() => removeHolding(holding.ticker)}
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive hover:text-destructive"
                         >
-                          {result.logo && (
-                            <Image
-                              src={result.logo}
-                              alt={result.symbol}
-                              width={32}
-                              height={32}
-                              className="w-8 h-8 rounded object-contain bg-white"
-                              unoptimized
-                            />
-                          )}
-                          <div className="flex-1">
-                            <div className="font-semibold font-mono">{result.symbol}</div>
-                            <div className="text-sm text-muted-foreground">{result.name}</div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {result.exchange}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Separator />
+                  </div>
+                )}
 
-                <input
-                  type="number"
-                  value={newShares}
-                  onChange={(e) => setNewShares(e.target.value)}
-                  placeholder="Shares"
-                  min="0"
-                  step="0.01"
-                  className="px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-                <input
-                  type="number"
-                  value={newAvgPrice}
-                  onChange={(e) => setNewAvgPrice(e.target.value)}
-                  placeholder="Avg Price"
-                  min="0"
-                  step="0.01"
-                  className="px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
-              <button
-                onClick={addHolding}
-                className="mt-2 w-full px-4 py-2 bg-background hover:bg-muted border border-border rounded-lg transition-colors text-sm"
-              >
-                + Add Holding
-              </button>
-            </div>
+                {/* Add New Holding */}
+                <div className="space-y-3">
+                  <Label>Add New Holding</Label>
+                  <div className="relative" ref={dropdownRef}>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        value={newTicker}
+                        onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
+                        placeholder="Search ticker (e.g., AAPL)"
+                        className="pl-9"
+                        onFocus={() => newTicker.length >= 1 && searchResults.length > 0 && setShowDropdown(true)}
+                      />
+                      {isSearching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Autocomplete Dropdown */}
+                    {showDropdown && searchResults.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-card border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                        {searchResults.map((result) => (
+                          <button
+                            key={`${result.symbol}-${result.exchange}`}
+                            onClick={() => selectTicker(result)}
+                            className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b last:border-b-0 flex items-center gap-3"
+                          >
+                            {result.logo && (
+                              <Image
+                                src={result.logo}
+                                alt={result.symbol}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded object-contain bg-white"
+                                unoptimized
+                              />
+                            )}
+                            <div className="flex-1">
+                              <div className="font-semibold font-mono">{result.symbol}</div>
+                              <div className="text-sm text-muted-foreground">{result.name}</div>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {result.exchange}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="shares">Shares</Label>
+                      <Input
+                        id="shares"
+                        type="number"
+                        value={newShares}
+                        onChange={(e) => setNewShares(e.target.value)}
+                        placeholder="10"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="avg-price">Avg Price ($)</Label>
+                      <Input
+                        id="avg-price"
+                        type="number"
+                        value={newAvgPrice}
+                        onChange={(e) => setNewAvgPrice(e.target.value)}
+                        placeholder="150.50"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+
+                  <Button onClick={addHolding} variant="outline" className="w-full">
+                    <Check className="h-4 w-4" />
+                    Add Holding
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm">
+              <div className="p-3 bg-destructive/10 border border-destructive/50 rounded-lg text-destructive text-sm">
                 {error}
               </div>
             )}
 
-            <div className="flex justify-between gap-3 pt-4 border-t border-border">
-              <button
-                onClick={() => setStep(1)}
-                className="px-6 py-3 bg-background hover:bg-muted border border-border rounded-lg font-semibold transition-colors"
-              >
-                ← Back
-              </button>
-              <button
+            <DialogFooter className="flex flex-row gap-2 justify-between">
+              <Button onClick={() => setStep(1)} variant="outline" size="lg">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="px-6 py-3 bg-accent hover:bg-accent-hover disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
+                size="lg"
               >
-                {isSubmitting ? 'Saving...' : 'Complete Setup ✓'}
-              </button>
-            </div>
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Complete Setup
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
