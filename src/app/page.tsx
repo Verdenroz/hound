@@ -195,10 +195,10 @@ export default function Home() {
         </div>
         <div className="text-center max-w-md">
           <h1 className="text-5xl font-bold mb-4">
-            🐕 Hound AI Agent
+            🐕 Hound
           </h1>
           <p className="text-muted-foreground mb-8">
-            Autonomous Financial Trading Agent with RLUSD Blockchain Execution
+            Autonomous Financial Trading Agent
           </p>
           <p className="text-foreground mb-6">
             Please sign in to access your personalized portfolio and start the AI trading agent.
@@ -236,7 +236,7 @@ export default function Home() {
           </div>
           <div className="text-center max-w-md">
             <h1 className="text-5xl font-bold mb-4">
-              🐕 Hound AI Agent
+              🐕 Hound
             </h1>
             <p className="text-muted-foreground">
               Autonomous Financial Trading Agent
@@ -267,10 +267,10 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold">
-              🐕 Hound AI Agent
+              🐕 Hound AI
             </h1>
             <p className="text-muted-foreground mt-2">
-              Autonomous Financial Trading Agent with Blockchain Execution
+              Autonomous Financial Trading Agent
             </p>
           </div>
 

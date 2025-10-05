@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Hound - Autonomous Financial AI Agent",
-  description: "AI-powered autonomous trading agent with RLUSD execution on XRPL",
+  description: "Autonomous trading agent",
 };
 
 export default async function RootLayout({

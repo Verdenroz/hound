@@ -572,10 +572,11 @@ export class AgentOrchestrator {
         });
 
         // Update or remove holding
-        if (holding.shares === shares) {
+        const remainingShares = holding.shares - shares;
+        if (remainingShares <= 0) {
           await redis.removeHolding(this.userEmail, ticker);
         } else {
-          await redis.updateHolding(this.userEmail, ticker, holding.shares - shares);
+          await redis.updateHolding(this.userEmail, ticker, remainingShares);
         }
 
         this.log(`✅ SELL: ${shares} shares of ${ticker} @ $${price.toFixed(2)} (Total: $${exactTradeValue.toFixed(2)})`);
