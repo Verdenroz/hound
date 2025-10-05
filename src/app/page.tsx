@@ -29,6 +29,8 @@ interface Trade {
   shares: number;
   price: number;
   timestamp: number;
+  xrpl_tx?: string;
+  explorer_link?: string;
 }
 
 interface AgentLog {

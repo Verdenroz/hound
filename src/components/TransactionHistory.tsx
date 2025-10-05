@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, TrendingDown, History } from 'lucide-react';
+import { TrendingUp, TrendingDown, History, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -18,6 +18,8 @@ interface Trade {
   shares: number;
   price: number;
   timestamp: number;
+  xrpl_tx?: string;
+  explorer_link?: string;
 }
 
 interface TransactionHistoryProps {
@@ -63,6 +65,7 @@ export function TransactionHistory({ trades }: TransactionHistoryProps) {
                 <TableHead className="text-right">Shares</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-center">Transaction</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -107,6 +110,23 @@ export function TransactionHistory({ trades }: TransactionHistoryProps) {
                     </TableCell>
                     <TableCell className="text-right font-semibold font-mono">
                       ${total.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {trade.explorer_link ? (
+                        <a
+                          href={trade.explorer_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-600 transition-colors"
+                        >
+                          <span className="font-mono text-xs">
+                            {trade.xrpl_tx?.slice(0, 8)}...
+                          </span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
